@@ -1,0 +1,136 @@
+:root {
+  color-scheme: dark;
+  --font-ui: "Segoe UI Variable", "Segoe UI", Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-accent: "Cascadia Mono", "Segoe UI Mono", ui-monospace, monospace;
+
+  --color-neutral-0: #ffffff;
+  --color-neutral-50: #f7f8fa;
+  --color-neutral-100: #edf0f4;
+  --color-neutral-200: #d7dce4;
+  --color-neutral-300: #bac2ce;
+  --color-neutral-400: #919cab;
+  --color-neutral-500: #687485;
+  --color-neutral-600: #4a5564;
+  --color-neutral-700: #323a46;
+  --color-neutral-800: #222831;
+  --color-neutral-850: #1a1f27;
+  --color-neutral-900: #12161c;
+  --color-neutral-950: #090c10;
+  --color-black: #000000;
+
+  --color-red-400: #ef6b75;
+  --color-red-500: #d94b57;
+  --color-red-600: #b92f3c;
+  --color-green-400: #54d09a;
+  --color-green-500: #2daf79;
+  --color-amber-400: #f4bd62;
+  --color-amber-500: #d99a32;
+  --color-blue-400: #72a7ff;
+  --color-blue-500: #4d83de;
+
+  --color-accent: #c83f49;
+  --color-on-accent: #ffffff;
+  --color-accent-hover: #d75a63;
+  --color-accent-pressed: #a82f38;
+  --color-focus: #ef8f96;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  --radius-xs: 0.5rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+  --radius-round: 999px;
+
+  --shadow-card: 0 1rem 2.5rem color-mix(in srgb, var(--color-black) 22%, transparent);
+  --shadow-float: 0 1.5rem 4rem color-mix(in srgb, var(--color-black) 38%, transparent);
+  --shadow-focus: 0 0 0 0.2rem color-mix(in srgb, var(--color-focus) 34%, transparent);
+
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --duration-slow: 280ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  --z-titlebar: 40;
+  --z-navigation: 35;
+  --z-overlay: 70;
+  --z-dialog: 80;
+  --z-toast: 90;
+
+  --titlebar-height: 3.25rem;
+  --navigation-width: 18.5rem;
+  --navigation-compact-width: 4.75rem;
+  --control-height: 2.75rem;
+  --content-max: 120rem;
+  --density-space: 1rem;
+
+  --background-base: var(--color-neutral-950);
+  --background-raised: var(--color-neutral-900);
+  --surface-primary: var(--color-neutral-850);
+  --surface-secondary: var(--color-neutral-800);
+  --surface-interactive: var(--color-neutral-800);
+  --surface-hover: var(--color-neutral-700);
+  --surface-overlay: color-mix(in srgb, var(--color-neutral-950) 88%, transparent);
+  --text-primary: var(--color-neutral-50);
+  --text-secondary: var(--color-neutral-300);
+  --text-muted: var(--color-neutral-400);
+  --border-default: color-mix(in srgb, var(--color-neutral-300) 14%, transparent);
+  --border-strong: color-mix(in srgb, var(--color-neutral-200) 28%, transparent);
+  --status-success: var(--color-green-400);
+  --status-warning: var(--color-amber-400);
+  --status-error: var(--color-red-400);
+  --status-info: var(--color-blue-400);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background-base: var(--color-neutral-100);
+  --background-raised: var(--color-neutral-50);
+  --surface-primary: var(--color-neutral-0);
+  --surface-secondary: var(--color-neutral-100);
+  --surface-interactive: var(--color-neutral-100);
+  --surface-hover: var(--color-neutral-200);
+  --surface-overlay: color-mix(in srgb, var(--color-neutral-0) 92%, transparent);
+  --text-primary: var(--color-neutral-900);
+  --text-secondary: var(--color-neutral-600);
+  --text-muted: var(--color-neutral-500);
+  --border-default: color-mix(in srgb, var(--color-neutral-900) 13%, transparent);
+  --border-strong: color-mix(in srgb, var(--color-neutral-900) 24%, transparent);
+  --shadow-card: 0 1rem 2.5rem color-mix(in srgb, var(--color-neutral-900) 12%, transparent);
+  --shadow-float: 0 1.5rem 4rem color-mix(in srgb, var(--color-neutral-900) 22%, transparent);
+}
+
+:root[data-theme="contrast"] {
+  color-scheme: dark;
+  --background-base: var(--color-black);
+  --background-raised: var(--color-black);
+  --surface-primary: var(--color-neutral-950);
+  --surface-secondary: var(--color-neutral-900);
+  --surface-interactive: var(--color-neutral-900);
+  --surface-hover: var(--color-neutral-800);
+  --surface-overlay: var(--color-black);
+  --text-primary: var(--color-neutral-0);
+  --text-secondary: var(--color-neutral-50);
+  --text-muted: var(--color-neutral-200);
+  --border-default: var(--color-neutral-0);
+  --border-strong: var(--color-neutral-0);
+  --shadow-card: none;
+  --shadow-float: none;
+}
+
+:root[data-density="compact"] {
+  --density-space: 0.75rem;
+  --control-height: 2.4rem;
+}
+
+:root[data-navigation="compact"] { --navigation-width: var(--navigation-compact-width); }

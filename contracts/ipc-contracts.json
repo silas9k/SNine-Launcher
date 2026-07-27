@@ -1,0 +1,225 @@
+{
+  "version": 4,
+  "types": {
+    "Phase1CoreStatus": {
+      "schemaVersion": "number",
+      "platform": "string",
+      "registeredRoots": "string[]",
+      "incompleteOperations": "number",
+      "startupRecoveredOperations": "number"
+    },
+    "ShellSettings": {
+      "appearance": "\"system\" | \"light\" | \"dark\" | \"contrast\"",
+      "locale": "\"system\" | \"de\" | \"en\"",
+      "accentColor": "string",
+      "density": "\"compact\" | \"comfortable\"",
+      "navigationMode": "\"compact\" | \"expanded\"",
+      "backgroundVariant": "\"calm\" | \"grid\" | \"terrain\"",
+      "reducedMotion": "boolean"
+    },
+    "Phase2ShellBootstrap": {
+      "settings": "ShellSettings"
+    },
+    "Phase2SaveShellSettingsInput": {
+      "settings": "ShellSettings"
+    },
+    "Phase3Account": {
+      "id": "string",
+      "username": "string",
+      "kind": "\"microsoft\"",
+      "sessionState": "\"active\" | \"relogin-required\"",
+      "ownershipVerifiedAtUnix": "number",
+      "lastOnlineAuthAtUnix": "number",
+      "addedAtUnix": "number",
+      "lastUsedAtUnix": "number"
+    },
+    "Phase3OfflinePolicy": {
+      "policy": "\"unconfigured\"",
+      "eligible": "boolean",
+      "reason": "string"
+    },
+    "Phase3AuthSnapshot": {
+      "accounts": "Phase3Account[]",
+      "activeAccountId": "string | null",
+      "offlinePolicy": "Phase3OfflinePolicy"
+    },
+    "Phase3DeviceLoginPrompt": {
+      "loginId": "string",
+      "userCode": "string",
+      "verificationUri": "string",
+      "expiresAtUnix": "number",
+      "intervalSeconds": "number"
+    },
+    "Phase3StartDeviceLoginInput": {
+      "locale": "\"de\" | \"en\""
+    },
+    "Phase3LoginIdInput": {
+      "loginId": "string"
+    },
+    "Phase3AccountIdInput": {
+      "accountId": "string"
+    },
+    "Phase3ProfileAccountInput": {
+      "profileId": "string",
+      "accountId": "string | null"
+    },
+    "Phase4Profile": {
+      "id": "string",
+      "displayName": "string",
+      "lifecycleState": "\"active\" | \"archived\" | \"trash\"",
+      "activeRevisionId": "string",
+      "accountId": "string | null",
+      "favorite": "boolean",
+      "verificationState": "\"verified\" | \"unverified\"",
+      "sourceProfileId": "string | null",
+      "createdAtUnix": "number",
+      "updatedAtUnix": "number"
+    },
+    "Phase4CreateProfileInput": {
+      "displayName": "string"
+    },
+    "Phase4DuplicateProfileInput": {
+      "profileId": "string",
+      "displayName": "string"
+    },
+    "Phase4ProfileIdInput": {
+      "profileId": "string"
+    },
+    "Phase4FavoriteInput": {
+      "profileId": "string",
+      "favorite": "boolean"
+    },
+    "Phase4CacheGcReport": {
+      "scannedBlobs": "number",
+      "reachableBlobs": "number",
+      "eligibleForQuarantine": "number",
+      "eligibleBytes": "number",
+      "quarantinedThisRun": "number",
+      "restoredThisRun": "number",
+      "retainedInQuarantine": "number",
+      "deletionPolicy": "\"unconfigured\""
+    }
+  },
+  "commands": [
+    {
+      "name": "phase1_core_status",
+      "inputType": null,
+      "outputType": "Phase1CoreStatus",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase2_shell_bootstrap",
+      "inputType": null,
+      "outputType": "Phase2ShellBootstrap",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase2_save_shell_settings",
+      "inputType": "Phase2SaveShellSettingsInput",
+      "outputType": "Phase2ShellBootstrap",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase3_auth_snapshot",
+      "inputType": null,
+      "outputType": "Phase3AuthSnapshot",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase3_start_device_login",
+      "inputType": "Phase3StartDeviceLoginInput",
+      "outputType": "Phase3DeviceLoginPrompt",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase3_complete_device_login",
+      "inputType": "Phase3LoginIdInput",
+      "outputType": "Phase3Account",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase3_cancel_device_login",
+      "inputType": "Phase3LoginIdInput",
+      "outputType": "void",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase3_refresh_account",
+      "inputType": "Phase3AccountIdInput",
+      "outputType": "Phase3Account",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase3_select_account",
+      "inputType": "Phase3AccountIdInput",
+      "outputType": "Phase3Account",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase3_remove_account",
+      "inputType": "Phase3AccountIdInput",
+      "outputType": "void",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase3_assign_profile_account",
+      "inputType": "Phase3ProfileAccountInput",
+      "outputType": "void",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase4_list_profiles",
+      "inputType": null,
+      "outputType": "Phase4Profile[]",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase4_create_profile",
+      "inputType": "Phase4CreateProfileInput",
+      "outputType": "Phase4Profile",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase4_duplicate_profile",
+      "inputType": "Phase4DuplicateProfileInput",
+      "outputType": "Phase4Profile",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase4_archive_profile",
+      "inputType": "Phase4ProfileIdInput",
+      "outputType": "Phase4Profile",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase4_trash_profile",
+      "inputType": "Phase4ProfileIdInput",
+      "outputType": "Phase4Profile",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase4_restore_profile",
+      "inputType": "Phase4ProfileIdInput",
+      "outputType": "Phase4Profile",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase4_set_profile_favorite",
+      "inputType": "Phase4FavoriteInput",
+      "outputType": "Phase4Profile",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase4_cache_gc_preview",
+      "inputType": null,
+      "outputType": "Phase4CacheGcReport",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase4_quarantine_unreferenced_cache",
+      "inputType": null,
+      "outputType": "Phase4CacheGcReport",
+      "errorType": "TypedIpcError"
+    }
+  ]
+}

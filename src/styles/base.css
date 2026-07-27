@@ -1,0 +1,17 @@
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; min-width: 0; min-height: 100%; margin: 0; }
+html { background: var(--background-base); font-family: var(--font-ui); text-rendering: optimizeLegibility; }
+body { min-height: 100vh; overflow: hidden; color: var(--text-primary); background: var(--background-base); }
+button, input, select, textarea { font: inherit; }
+button { color: inherit; }
+a { color: inherit; }
+img, svg { display: block; }
+::selection { color: var(--color-on-accent); background: var(--color-accent); }
+:focus { outline: none; }
+:focus-visible { outline: 0.15rem solid var(--color-focus); outline-offset: 0.15rem; box-shadow: var(--shadow-focus); }
+.sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+.skip-link { position: fixed; top: var(--space-2); left: var(--space-2); z-index: calc(var(--z-dialog) + 20); padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); color: var(--color-on-accent); background: var(--color-accent); transform: translateY(-160%); transition: transform var(--duration-fast) var(--ease-standard); }
+.skip-link:focus { transform: translateY(0); }
+
+:root[data-reduced-motion="true"] *, :root[data-reduced-motion="true"] *::before, :root[data-reduced-motion="true"] *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }

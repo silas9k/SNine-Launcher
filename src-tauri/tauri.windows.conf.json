@@ -1,0 +1,29 @@
+{
+    "$schema":  "https://schema.tauri.app/config/2",
+    "bundle":  {
+                   "active":  true,
+                   "targets":  [
+                                   "nsis"
+                               ],
+                   "windows":  {
+                                   "webviewInstallMode":  {
+                                                              "type":  "downloadBootstrapper"
+                                                          },
+                                   "nsis":  {
+                                                "compression":  "lzma",
+                                                "installMode":  "both",
+                                                "languages":  [
+                                                                  "German",
+                                                                  "English"
+                                                              ],
+                                                "displayLanguageSelector":  true,
+                                                "startMenuFolder":  "S9Lab",
+                                                "installerIcon":  "icons/icon.ico",
+                                                "uninstallerIcon":  "icons/icon.ico"
+                                            }
+                               }
+               },
+    "plugins":  {
+
+                }
+}

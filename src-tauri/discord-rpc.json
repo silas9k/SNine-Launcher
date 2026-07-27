@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "client_id": "1515812729519214593",
+  "details": "Im S9Lab Launcher",
+  "state": "Bereit zum Start",
+  "large_image": "large",
+  "large_text": "S9Lab Launcher",
+  "reconnect_seconds": 15
+}
