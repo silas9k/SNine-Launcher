@@ -119,11 +119,10 @@ impl ProfileService {
             profile_root.root(),
             profile_root.absolute(),
         )?;
-        if let Err(error) = self.storage.create_profile_with_metadata(
-            &profile_id,
-            &display_name,
-            source_profile_id,
-        ) {
+        if let Err(error) =
+            self.storage
+                .create_profile_with_metadata(&profile_id, &display_name, source_profile_id)
+        {
             let _ = secure_fs::remove_tree(&profile_root);
             return Err(error);
         }
@@ -322,12 +321,11 @@ fn copy_directory_tree(
         return Err(AppError::coded("profile_copy_source_tree_invalid"));
     }
     let target_directory = target_root.join(relative);
-    let target = registry.resolve(
-        "profiles",
-        PathBuf::from(target_profile_id)
-            .join("instance")
-            .join(relative),
-    )?;
+    let mut target_relative = PathBuf::from(target_profile_id).join("instance");
+    if !relative.as_os_str().is_empty() {
+        target_relative.push(relative);
+    }
+    let target = registry.resolve("profiles", target_relative)?;
     secure_fs::create_directories_within(target.anchor(), target.root(), &target_directory)?;
     for entry in fs::read_dir(source_directory)? {
         let entry = entry?;
@@ -369,10 +367,7 @@ fn copy_directory_tree(
 
 fn validate_display_name(value: &str) -> AppResult<String> {
     let value = value.trim();
-    if value.is_empty()
-        || value.chars().count() > 64
-        || value.chars().any(char::is_control)
-    {
+    if value.is_empty() || value.chars().count() > 64 || value.chars().any(char::is_control) {
         return Err(AppError::coded("profile_display_name_invalid"));
     }
     Ok(value.to_string())
@@ -440,12 +435,24 @@ mod tests {
             .join("profiles")
             .join(&duplicate.id)
             .join("instance/saves/World/level.dat");
-        assert_eq!(fs::read(&duplicate_config).expect("duplicate data"), b"source-value");
-        assert_eq!(fs::read(&duplicate_world).expect("duplicate world"), b"source-world");
+        assert_eq!(
+            fs::read(&duplicate_config).expect("duplicate data"),
+            b"source-value"
+        );
+        assert_eq!(
+            fs::read(&duplicate_world).expect("duplicate world"),
+            b"source-world"
+        );
         fs::write(&duplicate_config, b"duplicate-value").expect("mutate duplicate");
         fs::write(&duplicate_world, b"duplicate-world").expect("mutate duplicate world");
-        assert_eq!(fs::read(&source_config).expect("source unchanged"), b"source-value");
-        assert_eq!(fs::read(&source_world).expect("source world unchanged"), b"source-world");
+        assert_eq!(
+            fs::read(&source_config).expect("source unchanged"),
+            b"source-value"
+        );
+        assert_eq!(
+            fs::read(&source_world).expect("source world unchanged"),
+            b"source-world"
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
@@ -465,6 +472,39 @@ mod tests {
         assert_eq!(restored.lifecycle_state, "archived");
         let active = profiles.restore_profile(&source.id).expect("unarchive");
         assert_eq!(active.lifecycle_state, "active");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn profile_duplicate_accepts_empty_root_relative_path_without_relaxing_separator_checks() {
+        let root = crate::foundation::test_root("phase4-profile-duplicate-root");
+        let core = CoreServices::open_fixed(&root).expect("core");
+        let profiles = ProfileService::from_core(&core);
+        let source = profiles.create_profile("Source").expect("source");
+        let source_marker = root
+            .join("profiles")
+            .join(&source.id)
+            .join("instance/root-marker.txt");
+        fs::write(&source_marker, b"root-marker").expect("source root marker");
+
+        let duplicate = profiles
+            .duplicate_profile(&source.id, "Duplicate")
+            .expect("duplicate");
+        let duplicate_marker = root
+            .join("profiles")
+            .join(&duplicate.id)
+            .join("instance/root-marker.txt");
+        assert_eq!(
+            fs::read(duplicate_marker).expect("duplicate root marker"),
+            b"root-marker"
+        );
+
+        let ambiguous = core
+            .registry()
+            .resolve("profiles", format!("{}/instance//config", duplicate.id))
+            .expect_err("ambiguous separator");
+        assert_eq!(ambiguous.descriptor().code, "path_ambiguous_separator");
+
         let _ = fs::remove_dir_all(root);
     }
 
@@ -498,14 +538,8 @@ mod tests {
             .join("instance/config/marker.txt");
         fs::write(&marker, b"incomplete").expect("marker");
 
-        let plan = build_profile_plan(
-            &profile_id,
-            "Rollback profile",
-            None,
-            None,
-            Vec::new(),
-        )
-        .expect("plan");
+        let plan = build_profile_plan(&profile_id, "Rollback profile", None, None, Vec::new())
+            .expect("plan");
         core.operations()
             .plan_profile_revision(&plan)
             .expect("register plan");
@@ -516,8 +550,12 @@ mod tests {
                 &FailAt(FailurePoint::AfterRevisionMoved),
             )
             .expect_err("injected failure");
-        assert_eq!(error.descriptor().code, "operation_failure_injected");
-        assert!(core.storage().profile(&profile_id).expect("profile query").is_none());
+        assert_eq!(error.descriptor().code, "operation_injected_failure");
+        assert!(core
+            .storage()
+            .profile(&profile_id)
+            .expect("profile query")
+            .is_none());
         assert!(!root.join("profiles").join(&profile_id).exists());
         let operation = core
             .storage()
@@ -543,7 +581,10 @@ mod tests {
         let records = core.storage().profiles().expect("list profiles");
         let elapsed = started.elapsed();
         assert_eq!(records.len(), 1_000);
-        assert!(elapsed < Duration::from_millis(500), "listing took {elapsed:?}");
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "listing took {elapsed:?}"
+        );
         let _ = fs::remove_dir_all(root);
     }
 }

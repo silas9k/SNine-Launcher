@@ -170,11 +170,8 @@ impl CacheStore {
     }
 
     fn discover_references(&self) -> AppResult<BTreeSet<String>> {
-        let mut reachable: BTreeSet<String> = self
-            .storage
-            .cache_reference_hashes()?
-            .into_iter()
-            .collect();
+        let mut reachable: BTreeSet<String> =
+            self.storage.cache_reference_hashes()?.into_iter().collect();
         for operation in self.storage.incomplete_operations()? {
             collect_hashes(operation.planned_changes_json.as_bytes(), &mut reachable);
         }
@@ -313,29 +310,23 @@ fn collect_hashes(bytes: &[u8], reachable: &mut BTreeSet<String>) {
         if window
             .iter()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-            && let Ok(value) = std::str::from_utf8(window)
         {
-            reachable.insert(value.to_string());
+            if let Ok(value) = std::str::from_utf8(window) {
+                reachable.insert(value.to_string());
+            }
         }
     }
 }
 
 fn verify_cache_file(path: &Path, blob: &CacheBlobRecord) -> AppResult<()> {
     let metadata = fs::metadata(path)?;
-    if !metadata.is_file()
-        || metadata.len() != blob.size_bytes
-        || hash_file(path)? != blob.sha256
-    {
+    if !metadata.is_file() || metadata.len() != blob.size_bytes || hash_file(path)? != blob.sha256 {
         return Err(AppError::coded("cache_blob_integrity_failed"));
     }
     Ok(())
 }
 
-fn combine_cache_cleanup_error(
-    code: &str,
-    primary: AppError,
-    rollback: AppResult<()>,
-) -> AppError {
+fn combine_cache_cleanup_error(code: &str, primary: AppError, rollback: AppResult<()>) -> AppError {
     match rollback {
         Ok(()) => primary,
         Err(rollback) => AppError::coded_with(
@@ -448,8 +439,11 @@ mod tests {
             .join("profiles")
             .join(&profile.id)
             .join("instance/config/cache-reference.json");
-        fs::write(&profile_reference, format!("{{\"sha256\":\"{profile_hash}\"}}"))
-            .expect("profile reference");
+        fs::write(
+            &profile_reference,
+            format!("{{\"sha256\":\"{profile_hash}\"}}"),
+        )
+        .expect("profile reference");
         profiles.archive_profile(&profile.id).expect("archive");
         profiles.trash_profile(&profile.id).expect("trash");
         fs::write(
@@ -461,10 +455,7 @@ mod tests {
         let preview = core.cache().gc_preview().expect("preview");
         assert_eq!(preview.eligible_for_quarantine, 1);
         assert_eq!(preview.deletion_policy, "unconfigured");
-        let swept = core
-            .cache()
-            .quarantine_unreferenced()
-            .expect("quarantine");
+        let swept = core.cache().quarantine_unreferenced().expect("quarantine");
         assert_eq!(swept.quarantined_this_run, 1);
         assert_eq!(swept.retained_in_quarantine, 1);
         let quarantined = core
@@ -475,7 +466,11 @@ mod tests {
         assert_eq!(quarantined.state, "quarantined");
         assert!(root
             .join("cache/quarantine/sha256")
-            .join(quarantined.quarantine_relative_path.expect("quarantine path"))
+            .join(
+                quarantined
+                    .quarantine_relative_path
+                    .expect("quarantine path")
+            )
             .is_file());
 
         core.storage()

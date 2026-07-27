@@ -48,4 +48,3 @@ pub struct ProfileSummary {
     pub created_at_unix: i64,
     pub updated_at_unix: i64,
 }
-

@@ -73,14 +73,9 @@ impl CredentialVault for OsCredentialVault {
     }
 
     fn legacy_session(&self, account_id: &str) -> AppResult<Option<AccountSession>> {
-        let refresh = Self::read_entry(
-            SERVICE,
-            &format!("{account_id}:{LEGACY_FIELD_REFRESH}"),
-        )?;
-        let minecraft = Self::read_entry(
-            SERVICE,
-            &format!("{account_id}:{LEGACY_FIELD_MINECRAFT}"),
-        )?;
+        let refresh = Self::read_entry(SERVICE, &format!("{account_id}:{LEGACY_FIELD_REFRESH}"))?;
+        let minecraft =
+            Self::read_entry(SERVICE, &format!("{account_id}:{LEGACY_FIELD_MINECRAFT}"))?;
         let meta = Self::read_entry(SERVICE, &format!("{account_id}:{LEGACY_FIELD_META}"))?;
         let (Some(refresh), Some(minecraft), Some(meta)) = (refresh, minecraft, meta) else {
             return Ok(None);
@@ -366,11 +361,7 @@ fn account_from_record(record: AccountRecord) -> AppResult<Account> {
     })
 }
 
-fn validate_identity(
-    account_id: &str,
-    username: &str,
-    session: &AccountSession,
-) -> AppResult<()> {
+fn validate_identity(account_id: &str, username: &str, session: &AccountSession) -> AppResult<()> {
     let compact_id: String = account_id
         .chars()
         .filter(|character| *character != '-')
@@ -531,8 +522,13 @@ mod tests {
             )
             .expect("persist");
         let database_bytes = fs::read(store.storage().database_path()).expect("database");
-        for forbidden in [["refresh", "-fixture"].concat(), ["access", "-fixture"].concat()] {
-            assert!(!database_bytes.windows(forbidden.len()).any(|window| window == forbidden.as_bytes()));
+        for forbidden in [
+            ["refresh", "-fixture"].concat(),
+            ["access", "-fixture"].concat(),
+        ] {
+            assert!(!database_bytes
+                .windows(forbidden.len())
+                .any(|window| window == forbidden.as_bytes()));
         }
         let record = store
             .storage()
@@ -572,7 +568,11 @@ mod tests {
             .expect("record")
             .vault_ref;
         store.remove_account(&account.id).expect("remove");
-        assert!(store.storage().account(&account.id).expect("query").is_none());
+        assert!(store
+            .storage()
+            .account(&account.id)
+            .expect("query")
+            .is_none());
         assert!(vault.get(&vault_ref).expect("vault").is_none());
         let _ = fs::remove_dir_all(root);
     }

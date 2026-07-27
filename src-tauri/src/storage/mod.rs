@@ -379,9 +379,9 @@ impl Storage {
     }
 
     pub fn restore_profile(&self, profile_id: &str) -> AppResult<ProfileRecord> {
-        let record = self
-            .profile(profile_id)?
-            .ok_or_else(|| AppError::coded_with("profile_not_found", [("profileId", profile_id)]))?;
+        let record = self.profile(profile_id)?.ok_or_else(|| {
+            AppError::coded_with("profile_not_found", [("profileId", profile_id)])
+        })?;
         let target = match record.lifecycle_state.as_str() {
             "archived" => "active",
             "trash" => record.trashed_from_state.as_deref().unwrap_or("active"),
@@ -398,11 +398,7 @@ impl Storage {
         self.update_profile_lifecycle(profile_id, target)
     }
 
-    fn update_profile_lifecycle(
-        &self,
-        profile_id: &str,
-        target: &str,
-    ) -> AppResult<ProfileRecord> {
+    fn update_profile_lifecycle(&self, profile_id: &str, target: &str) -> AppResult<ProfileRecord> {
         let now = Utc::now().timestamp();
         let connection = self.open()?;
         connection.transaction(|transaction| {
@@ -483,7 +479,9 @@ impl Storage {
                 .ok_or_else(|| AppError::coded("profile_not_found"))?
                 .optional_text(0)?;
             if active.is_some() {
-                return Err(AppError::coded("profile_incomplete_cleanup_has_active_revision"));
+                return Err(AppError::coded(
+                    "profile_incomplete_cleanup_has_active_revision",
+                ));
             }
             let state = transaction
                 .query_one(
@@ -493,7 +491,9 @@ impl Storage {
                 .ok_or_else(|| AppError::coded("operation_not_found"))?
                 .text(0)?;
             if !matches!(state.as_str(), "rolled-back" | "failed") {
-                return Err(AppError::coded("profile_incomplete_cleanup_operation_not_terminal"));
+                return Err(AppError::coded(
+                    "profile_incomplete_cleanup_operation_not_terminal",
+                ));
             }
             transaction.execute(
                 "UPDATE operations SET profile_id = NULL WHERE id = ?1 AND profile_id = ?2",
@@ -969,10 +969,7 @@ impl Storage {
             let changed = transaction.execute(
                 "UPDATE cache_blobs SET state = 'verified', last_verified_at_unix = ?2 \
                  WHERE sha256 = ?1 AND state = 'quarantined'",
-                &[
-                    Value::from(sha256),
-                    Value::Integer(Utc::now().timestamp()),
-                ],
+                &[Value::from(sha256), Value::Integer(Utc::now().timestamp())],
             )?;
             if removed != 1 || changed != 1 {
                 return Err(AppError::coded("cache_quarantine_metadata_missing"));

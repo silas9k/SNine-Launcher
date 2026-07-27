@@ -73,7 +73,8 @@ impl AuthService {
     pub async fn start_device_login(&self, locale: &str) -> AppResult<DeviceLoginPrompt> {
         let secret = self.api.request_device_code(locale).await?;
         let now = Utc::now().timestamp();
-        let expires_at_unix = now.saturating_add(i64::try_from(secret.expires_in).unwrap_or(i64::MAX));
+        let expires_at_unix =
+            now.saturating_add(i64::try_from(secret.expires_in).unwrap_or(i64::MAX));
         let login_id = new_identifier("login");
         let prompt = DeviceLoginPrompt {
             login_id: login_id.clone(),

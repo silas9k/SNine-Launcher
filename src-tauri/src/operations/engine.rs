@@ -409,8 +409,7 @@ impl OperationEngine {
     fn validate_plan_documents(&self, plan: &ProfileInstallPlan) -> AppResult<()> {
         if crate::operations::model::sha256_hex(plan.manifest_json.as_bytes())
             != plan.manifest_sha256
-            || crate::operations::model::sha256_hex(plan.lock_json.as_bytes())
-                != plan.lock_sha256
+            || crate::operations::model::sha256_hex(plan.lock_json.as_bytes()) != plan.lock_sha256
         {
             return Err(AppError::coded("operation_plan_document_hash_mismatch"));
         }

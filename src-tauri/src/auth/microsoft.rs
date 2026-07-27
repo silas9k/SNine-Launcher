@@ -17,15 +17,13 @@ use tokio::time::sleep;
 
 pub const MICROSOFT_CLIENT_ID: &str = "e686aebd-d575-4472-b163-b0c54f388f43";
 const MICROSOFT_SCOPE: &str = "XboxLive.signin offline_access";
-const DEVICE_CODE_URL: &str =
-    "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
+const DEVICE_CODE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
 const TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
 const XBOX_AUTH_URL: &str = "https://user.auth.xboxlive.com/user/authenticate";
 const XSTS_URL: &str = "https://xsts.auth.xboxlive.com/xsts/authorize";
 const MINECRAFT_LOGIN_URL: &str =
     "https://api.minecraftservices.com/authentication/login_with_xbox";
-const MINECRAFT_ENTITLEMENTS_URL: &str =
-    "https://api.minecraftservices.com/entitlements/mcstore";
+const MINECRAFT_ENTITLEMENTS_URL: &str = "https://api.minecraftservices.com/entitlements/mcstore";
 const MINECRAFT_PROFILE_URL: &str = "https://api.minecraftservices.com/minecraft/profile";
 
 #[derive(Debug, Clone)]
@@ -222,10 +220,7 @@ impl MicrosoftApi {
                 .client
                 .post(TOKEN_URL)
                 .form(&[
-                    (
-                        "grant_type",
-                        "urn:ietf:params:oauth:grant-type:device_code",
-                    ),
+                    ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
                     ("client_id", MICROSOFT_CLIENT_ID),
                     ("device_code", secret.device_code.as_str()),
                 ])
@@ -282,7 +277,9 @@ impl MicrosoftApi {
             .or_else(|| xbl_claim.xid.clone());
         let minecraft = self.login_minecraft(&user_hash, &xsts.token).await?;
         self.verify_entitlement(&minecraft.access_token).await?;
-        let profile = self.fetch_minecraft_profile(&minecraft.access_token).await?;
+        let profile = self
+            .fetch_minecraft_profile(&minecraft.access_token)
+            .await?;
         let now = Utc::now().timestamp();
         Ok(VerifiedMinecraftSession {
             account_id: profile.id,
@@ -410,7 +407,8 @@ fn owns_minecraft_java(entitlements: &MinecraftEntitlementsResponse) -> bool {
 }
 
 fn validate_verification_uri(value: &str) -> AppResult<()> {
-    let url = reqwest::Url::parse(value).map_err(|_| AppError::coded("auth_verification_uri_invalid"))?;
+    let url =
+        reqwest::Url::parse(value).map_err(|_| AppError::coded("auth_verification_uri_invalid"))?;
     let host = url
         .host_str()
         .ok_or_else(|| AppError::coded("auth_verification_uri_invalid"))?;
@@ -459,16 +457,14 @@ mod tests {
 
     #[test]
     fn ownership_requires_a_minecraft_entitlement() {
-        let owned: MinecraftEntitlementsResponse = serde_json::from_str(
-            r#"{"items":[{"name":"game_minecraft"}]}"#,
-        )
-        .expect("owned fixture");
+        let owned: MinecraftEntitlementsResponse =
+            serde_json::from_str(r#"{"items":[{"name":"game_minecraft"}]}"#)
+                .expect("owned fixture");
         let empty: MinecraftEntitlementsResponse =
             serde_json::from_str(r#"{"items":[]}"#).expect("empty fixture");
-        let lookalike: MinecraftEntitlementsResponse = serde_json::from_str(
-            r#"{"items":[{"name":"unrelated_minecraft_preview"}]}"#,
-        )
-        .expect("lookalike fixture");
+        let lookalike: MinecraftEntitlementsResponse =
+            serde_json::from_str(r#"{"items":[{"name":"unrelated_minecraft_preview"}]}"#)
+                .expect("lookalike fixture");
         assert!(owns_minecraft_java(&owned));
         assert!(!owns_minecraft_java(&empty));
         assert!(!owns_minecraft_java(&lookalike));
