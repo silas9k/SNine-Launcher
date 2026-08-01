@@ -52,7 +52,8 @@ for (const file of [
   if (!fs.existsSync(file)) errors.push(`Phase-1-Kerndatei fehlt: ${file}`);
 }
 
-const productionOperations = read("src-tauri/src/operations/engine.rs");
+const productionOperations = read("src-tauri/src/operations/engine.rs")
+  .split(/\r?\n#\[cfg\(test\)\]\r?\nmod tests/u)[0];
 if (productionOperations.includes("FailAt")) {
   errors.push("Failure-Injection darf nicht im produktiven Operationspfad instanziiert werden.");
 }

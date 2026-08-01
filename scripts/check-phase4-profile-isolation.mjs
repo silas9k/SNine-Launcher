@@ -1,6 +1,9 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+const PHASE4_MIGRATION_SHA256 = "129419b811bc8bdc909c50b77a713ed01e00f4397897175ba75ec4a201d184fd";
 
 const REQUIRED_MUTABLE_DIRECTORIES = [
   "instance/mods",
@@ -24,6 +27,20 @@ export function permanentQuarantineDeletion(text) {
   return /(?:remove_file|remove_dir_all|delete_quarantined|purge_quarantined)\s*\(/i.test(product);
 }
 
+export function latestSchemaVersion(text) {
+  const match = text.match(/LATEST_SCHEMA_VERSION:\s*i64\s*=\s*(\d+)\b/);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+export function phase4MigrationIsCanonical(text) {
+  const match = text.match(
+    /Migration\s*\{\s*version:\s*5,\s*name:\s*"phase4_profile_lifecycle_and_cache_quarantine",\s*sql:\s*r#"([\s\S]*?)"#,\s*\},/,
+  );
+  if (!match) return false;
+  const normalizedSql = match[1].replaceAll("\r\n", "\n").trim();
+  return crypto.createHash("sha256").update(normalizedSql).digest("hex") === PHASE4_MIGRATION_SHA256;
+}
+
 export function inspectPhase4ProfileIsolation(root = ".") {
   const errors = [];
   const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
@@ -38,7 +55,8 @@ export function inspectPhase4ProfileIsolation(root = ".") {
   const contract = JSON.parse(read("contracts/ipc-contracts.json"));
 
   for (const [description, ok] of [
-    ["SQLite-Schema v5 fehlt", /LATEST_SCHEMA_VERSION:\s*i64\s*=\s*5\b/.test(migrations)],
+    ["SQLite-Schema ist älter als v5", (latestSchemaVersion(migrations) ?? 0) >= 5],
+    ["bestehende Phase-4-Migration 5 wurde verändert", phase4MigrationIsCanonical(migrations)],
     ["Profil-Metadatenmigration fehlt", migrations.includes("profile_metadata")],
     ["Profil-Lineage-Migration fehlt", migrations.includes("profile_lineage")],
     ["Cache-Quarantänemigration fehlt", migrations.includes("cache_quarantine")],

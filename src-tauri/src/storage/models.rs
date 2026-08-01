@@ -1,4 +1,5 @@
 use crate::operations::model::{OperationState, OperationType};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccountRecord {
@@ -25,6 +26,20 @@ pub struct ProfileRecord {
     pub source_profile_id: Option<String>,
     pub account_id: Option<String>,
     pub created_at_unix: i64,
+    pub updated_at_unix: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeQueryProjection {
+    pub profile_id: String,
+    pub revision_id: String,
+    pub minecraft_version: String,
+    pub loader_kind: String,
+    pub loader_version: Option<String>,
+    pub component_id: Option<String>,
+    pub component_version: Option<String>,
+    pub install_state: String,
     pub updated_at_unix: i64,
 }
 

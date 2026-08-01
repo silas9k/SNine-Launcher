@@ -1,6 +1,9 @@
 use crate::{
     error::{AppError, AppResult},
-    operations::{engine::OperationEngine, model::OperationState},
+    operations::{
+        engine::{OperationEngine, REVISION_CACHE_OWNER_TYPE},
+        model::OperationState,
+    },
 };
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -43,6 +46,10 @@ impl OperationEngine {
                                 operation.previous_revision_id.as_deref(),
                             )?;
                         }
+                        self.storage().remove_cache_references(
+                            REVISION_CACHE_OWNER_TYPE,
+                            target_revision_id,
+                        )?;
                         let target = self.registry().resolve(
                             "profiles",
                             format!("{profile_id}/revisions/{target_revision_id}"),
@@ -76,7 +83,9 @@ impl OperationEngine {
 
             let final_state = match original_state {
                 OperationState::Validating => {
-                    if self.validate_active(&plan).is_ok() {
+                    if self.validate_active(&plan).is_ok()
+                        && self.replace_revision_cache_references(&plan).is_ok()
+                    {
                         self.cleanup_staging(&operation.id)?;
                         self.storage().update_operation_state(
                             &operation.id,
@@ -96,6 +105,7 @@ impl OperationEngine {
                         .and_then(|item| item.active_revision_id.as_deref())
                         == Some(plan.revision_id.as_str())
                         && self.validate_active(&plan).is_ok()
+                        && self.replace_revision_cache_references(&plan).is_ok()
                     {
                         self.cleanup_staging(&operation.id)?;
                         self.storage().update_operation_state(

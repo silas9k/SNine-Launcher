@@ -10,7 +10,7 @@ use crate::{
         migrations::LATEST_SCHEMA_VERSION,
         models::{
             AccountRecord, CacheBlobRecord, JournalRecord, OperationRecord, ProfileRecord,
-            RevisionRecord,
+            RevisionRecord, RuntimeQueryProjection,
         },
         sqlite::{Connection, Value},
     },
@@ -350,6 +350,123 @@ impl Storage {
             .into_iter()
             .map(parse_profile_row)
             .collect()
+    }
+
+    pub fn runtime_projection(
+        &self,
+        profile_id: &str,
+    ) -> AppResult<Option<RuntimeQueryProjection>> {
+        validate_runtime_text("profileId", profile_id, 128)?;
+        self.open()?
+            .query_one(
+                "SELECT profile_id, revision_id, minecraft_version, loader_kind,\
+                        loader_version, component_id, component_version, install_state,\
+                        updated_at_unix \
+                 FROM profile_runtime_projection WHERE profile_id = ?1",
+                &[Value::from(profile_id)],
+            )?
+            .map(parse_runtime_projection_row)
+            .transpose()
+    }
+
+    pub fn runtime_projections(&self) -> AppResult<Vec<RuntimeQueryProjection>> {
+        self.open()?
+            .query(
+                "SELECT profile_id, revision_id, minecraft_version, loader_kind,\
+                        loader_version, component_id, component_version, install_state,\
+                        updated_at_unix \
+                 FROM profile_runtime_projection ORDER BY profile_id",
+                &[],
+            )?
+            .into_iter()
+            .map(parse_runtime_projection_row)
+            .collect()
+    }
+
+    pub fn upsert_runtime_projection(&self, record: &RuntimeQueryProjection) -> AppResult<()> {
+        validate_runtime_projection(record)?;
+        let connection = self.open()?;
+        connection.transaction(|transaction| {
+            let revision = transaction.query_one(
+                "SELECT profile_id, status FROM profile_revisions WHERE id = ?1",
+                &[Value::from(record.revision_id.as_str())],
+            )?;
+            let revision = revision.ok_or_else(|| {
+                AppError::coded_with(
+                    "runtime_revision_not_found",
+                    [("revisionId", record.revision_id.clone())],
+                )
+            })?;
+            let revision_profile_id = revision.text(0)?;
+            if revision_profile_id != record.profile_id {
+                return Err(AppError::coded_with(
+                    "runtime_revision_profile_mismatch",
+                    [
+                        ("profileId", record.profile_id.clone()),
+                        ("revisionId", record.revision_id.clone()),
+                    ],
+                ));
+            }
+            if revision.text(1)? != "committed" {
+                return Err(AppError::coded_with(
+                    "runtime_revision_not_committed",
+                    [("revisionId", record.revision_id.clone())],
+                ));
+            }
+
+            transaction.execute(
+                "INSERT INTO profile_runtime_projection(\
+                    profile_id, revision_id, minecraft_version, loader_kind, loader_version,\
+                    component_id, component_version, install_state, updated_at_unix\
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
+                 ON CONFLICT(profile_id) DO UPDATE SET \
+                    revision_id = excluded.revision_id,\
+                    minecraft_version = excluded.minecraft_version,\
+                    loader_kind = excluded.loader_kind,\
+                    loader_version = excluded.loader_version,\
+                    component_id = excluded.component_id,\
+                    component_version = excluded.component_version,\
+                    install_state = excluded.install_state,\
+                    updated_at_unix = excluded.updated_at_unix",
+                &[
+                    Value::from(record.profile_id.as_str()),
+                    Value::from(record.revision_id.as_str()),
+                    Value::from(record.minecraft_version.as_str()),
+                    Value::from(record.loader_kind.as_str()),
+                    record
+                        .loader_version
+                        .as_deref()
+                        .map(Value::from)
+                        .unwrap_or(Value::Null),
+                    record
+                        .component_id
+                        .as_deref()
+                        .map(Value::from)
+                        .unwrap_or(Value::Null),
+                    record
+                        .component_version
+                        .as_deref()
+                        .map(Value::from)
+                        .unwrap_or(Value::Null),
+                    Value::from(record.install_state.as_str()),
+                    Value::Integer(record.updated_at_unix),
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn delete_runtime_projection(&self, profile_id: &str) -> AppResult<bool> {
+        validate_runtime_text("profileId", profile_id, 128)?;
+        let connection = self.open()?;
+        connection.transaction(|transaction| {
+            transaction
+                .execute(
+                    "DELETE FROM profile_runtime_projection WHERE profile_id = ?1",
+                    &[Value::from(profile_id)],
+                )
+                .map(|changed| changed == 1)
+        })
     }
 
     pub fn set_profile_favorite(&self, profile_id: &str, favorite: bool) -> AppResult<()> {
@@ -701,6 +818,22 @@ impl Storage {
         revision: &RevisionRecord,
         expected_previous_revision: Option<&str>,
     ) -> AppResult<()> {
+        self.activate_revision_with_runtime_projection(revision, expected_previous_revision, None)
+    }
+
+    pub fn activate_revision_with_runtime_projection(
+        &self,
+        revision: &RevisionRecord,
+        expected_previous_revision: Option<&str>,
+        runtime_projection: Option<&RuntimeQueryProjection>,
+    ) -> AppResult<()> {
+        if let Some(projection) = runtime_projection {
+            validate_runtime_projection(projection)?;
+            if projection.profile_id != revision.profile_id || projection.revision_id != revision.id
+            {
+                return Err(AppError::coded("runtime_projection_revision_mismatch"));
+            }
+        }
         let connection = self.open()?;
         connection.transaction(|transaction| {
             let active = transaction
@@ -748,6 +881,9 @@ impl Storage {
                     Value::Integer(Utc::now().timestamp()),
                 ],
             )?;
+            if let Some(projection) = runtime_projection {
+                upsert_runtime_projection_row(transaction, projection)?;
+            }
             Ok(())
         })
     }
@@ -758,6 +894,29 @@ impl Storage {
         current_revision: &str,
         previous_revision: Option<&str>,
     ) -> AppResult<()> {
+        self.restore_active_revision_with_runtime_projection(
+            profile_id,
+            current_revision,
+            previous_revision,
+            None,
+        )
+    }
+
+    pub fn restore_active_revision_with_runtime_projection(
+        &self,
+        profile_id: &str,
+        current_revision: &str,
+        previous_revision: Option<&str>,
+        runtime_projection: Option<&RuntimeQueryProjection>,
+    ) -> AppResult<()> {
+        if let Some(projection) = runtime_projection {
+            validate_runtime_projection(projection)?;
+            if projection.profile_id != profile_id
+                || Some(projection.revision_id.as_str()) != previous_revision
+            {
+                return Err(AppError::coded("runtime_projection_revision_mismatch"));
+            }
+        }
         let connection = self.open()?;
         connection.transaction(|transaction| {
             let current = transaction
@@ -784,6 +943,9 @@ impl Storage {
                 "UPDATE profile_revisions SET status = 'invalidated' WHERE id = ?1 AND profile_id = ?2",
                 &[Value::from(current_revision), Value::from(profile_id)],
             )?;
+            if let Some(projection) = runtime_projection {
+                upsert_runtime_projection_row(transaction, projection)?;
+            }
             Ok(())
         })
     }
@@ -918,6 +1080,78 @@ impl Storage {
         Ok(())
     }
 
+    pub fn replace_cache_references(
+        &self,
+        owner_type: &str,
+        owner_id: &str,
+        hashes: &[String],
+    ) -> AppResult<()> {
+        validate_cache_reference_owner(owner_type, owner_id)?;
+        let mut hashes = hashes.to_vec();
+        hashes.sort();
+        hashes.dedup();
+        for hash in &hashes {
+            validate_cache_hash(hash)?;
+        }
+        let connection = self.open()?;
+        connection.transaction(|transaction| {
+            transaction.execute(
+                "DELETE FROM cache_references WHERE owner_type = ?1 AND owner_id = ?2",
+                &[Value::from(owner_type), Value::from(owner_id)],
+            )?;
+            for hash in &hashes {
+                let blob = transaction.query_one(
+                    "SELECT state FROM cache_blobs WHERE sha256 = ?1",
+                    &[Value::from(hash.as_str())],
+                )?;
+                if blob.as_ref().map(|row| row.text(0)).transpose()?.as_deref() != Some("verified")
+                {
+                    return Err(AppError::coded_with(
+                        "cache_reference_blob_not_verified",
+                        [("sha256", hash.clone())],
+                    ));
+                }
+                transaction.execute(
+                    "INSERT INTO cache_references(\
+                        blob_sha256, owner_type, owner_id, created_at_unix\
+                     ) VALUES (?1, ?2, ?3, ?4)",
+                    &[
+                        Value::from(hash.as_str()),
+                        Value::from(owner_type),
+                        Value::from(owner_id),
+                        Value::Integer(Utc::now().timestamp()),
+                    ],
+                )?;
+            }
+            Ok(())
+        })
+    }
+
+    pub fn remove_cache_references(&self, owner_type: &str, owner_id: &str) -> AppResult<usize> {
+        validate_cache_reference_owner(owner_type, owner_id)?;
+        self.open()?.execute(
+            "DELETE FROM cache_references WHERE owner_type = ?1 AND owner_id = ?2",
+            &[Value::from(owner_type), Value::from(owner_id)],
+        )
+    }
+
+    pub fn cache_references_for_owner(
+        &self,
+        owner_type: &str,
+        owner_id: &str,
+    ) -> AppResult<Vec<String>> {
+        validate_cache_reference_owner(owner_type, owner_id)?;
+        self.open()?
+            .query(
+                "SELECT blob_sha256 FROM cache_references \
+                 WHERE owner_type = ?1 AND owner_id = ?2 ORDER BY blob_sha256",
+                &[Value::from(owner_type), Value::from(owner_id)],
+            )?
+            .into_iter()
+            .map(|row| row.text(0))
+            .collect()
+    }
+
     pub fn cache_reference_hashes(&self) -> AppResult<Vec<String>> {
         self.open()?
             .query(
@@ -1007,6 +1241,38 @@ fn optional_integer(value: Option<i64>) -> Value {
     value.map(Value::Integer).unwrap_or(Value::Null)
 }
 
+fn validate_cache_reference_owner(owner_type: &str, owner_id: &str) -> AppResult<()> {
+    const ALLOWED_OWNER_TYPES: &[&str] = &[
+        "profile-revision",
+        "runtime-launch",
+        "backup",
+        "recovery",
+        "operation",
+    ];
+    if !ALLOWED_OWNER_TYPES.contains(&owner_type)
+        || owner_id.is_empty()
+        || owner_id.len() > 160
+        || !owner_id.is_ascii()
+        || !owner_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    {
+        return Err(AppError::coded("cache_reference_owner_invalid"));
+    }
+    Ok(())
+}
+
+fn validate_cache_hash(hash: &str) -> AppResult<()> {
+    if hash.len() != 64
+        || !hash
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(AppError::coded("cache_reference_hash_invalid"));
+    }
+    Ok(())
+}
+
 fn parse_operation_row(row: sqlite::Row) -> AppResult<OperationRecord> {
     Ok(OperationRecord {
         id: row.text(0)?,
@@ -1054,6 +1320,65 @@ fn parse_profile_row(row: sqlite::Row) -> AppResult<ProfileRecord> {
     })
 }
 
+fn upsert_runtime_projection_row(
+    connection: &Connection,
+    record: &RuntimeQueryProjection,
+) -> AppResult<()> {
+    connection.execute(
+        "INSERT INTO profile_runtime_projection(\
+            profile_id, revision_id, minecraft_version, loader_kind, loader_version,\
+            component_id, component_version, install_state, updated_at_unix\
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
+         ON CONFLICT(profile_id) DO UPDATE SET \
+            revision_id = excluded.revision_id,\
+            minecraft_version = excluded.minecraft_version,\
+            loader_kind = excluded.loader_kind,\
+            loader_version = excluded.loader_version,\
+            component_id = excluded.component_id,\
+            component_version = excluded.component_version,\
+            install_state = excluded.install_state,\
+            updated_at_unix = excluded.updated_at_unix",
+        &[
+            Value::from(record.profile_id.as_str()),
+            Value::from(record.revision_id.as_str()),
+            Value::from(record.minecraft_version.as_str()),
+            Value::from(record.loader_kind.as_str()),
+            record
+                .loader_version
+                .as_deref()
+                .map(Value::from)
+                .unwrap_or(Value::Null),
+            record
+                .component_id
+                .as_deref()
+                .map(Value::from)
+                .unwrap_or(Value::Null),
+            record
+                .component_version
+                .as_deref()
+                .map(Value::from)
+                .unwrap_or(Value::Null),
+            Value::from(record.install_state.as_str()),
+            Value::Integer(record.updated_at_unix),
+        ],
+    )?;
+    Ok(())
+}
+
+fn parse_runtime_projection_row(row: sqlite::Row) -> AppResult<RuntimeQueryProjection> {
+    Ok(RuntimeQueryProjection {
+        profile_id: row.text(0)?,
+        revision_id: row.text(1)?,
+        minecraft_version: row.text(2)?,
+        loader_kind: row.text(3)?,
+        loader_version: row.optional_text(4)?,
+        component_id: row.optional_text(5)?,
+        component_version: row.optional_text(6)?,
+        install_state: row.text(7)?,
+        updated_at_unix: row.integer(8)?,
+    })
+}
+
 fn parse_cache_blob_row(row: sqlite::Row) -> AppResult<CacheBlobRecord> {
     let size = row.integer(1)?;
     let size_bytes = u64::try_from(size).map_err(|_| AppError::coded("cache_size_invalid"))?;
@@ -1069,6 +1394,92 @@ fn parse_cache_blob_row(row: sqlite::Row) -> AppResult<CacheBlobRecord> {
     })
 }
 
+fn validate_runtime_projection(record: &RuntimeQueryProjection) -> AppResult<()> {
+    validate_runtime_text("profileId", &record.profile_id, 128)?;
+    validate_runtime_text("revisionId", &record.revision_id, 128)?;
+    validate_runtime_text("minecraftVersion", &record.minecraft_version, 64)?;
+
+    match (
+        record.loader_kind.as_str(),
+        record.loader_version.as_deref(),
+    ) {
+        ("vanilla", None) => {}
+        ("fabric" | "neoforge", Some(version)) => {
+            validate_runtime_text("loaderVersion", version, 128)?;
+        }
+        ("vanilla", Some(_)) => {
+            return Err(runtime_projection_invalid(
+                "loaderVersion",
+                "must_be_null_for_vanilla",
+            ));
+        }
+        ("fabric" | "neoforge", None) => {
+            return Err(runtime_projection_invalid(
+                "loaderVersion",
+                "required_for_modded_loader",
+            ));
+        }
+        _ => {
+            return Err(runtime_projection_invalid(
+                "loaderKind",
+                "unsupported_loader",
+            ));
+        }
+    }
+
+    match (
+        record.component_id.as_deref(),
+        record.component_version.as_deref(),
+    ) {
+        (None, None) => {}
+        (Some(component_id), Some(component_version)) => {
+            validate_runtime_text("componentId", component_id, 128)?;
+            validate_runtime_text("componentVersion", component_version, 128)?;
+        }
+        _ => {
+            return Err(runtime_projection_invalid(
+                "component",
+                "id_and_version_must_be_paired",
+            ));
+        }
+    }
+
+    if !matches!(
+        record.install_state.as_str(),
+        "configured" | "installed" | "repair-required"
+    ) {
+        return Err(runtime_projection_invalid(
+            "installState",
+            "unsupported_state",
+        ));
+    }
+    if record.updated_at_unix < 0 {
+        return Err(runtime_projection_invalid(
+            "updatedAtUnix",
+            "must_be_non_negative",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_runtime_text(field: &str, value: &str, max_chars: usize) -> AppResult<()> {
+    if value.is_empty()
+        || value.trim() != value
+        || value.chars().count() > max_chars
+        || value.chars().any(char::is_control)
+    {
+        return Err(runtime_projection_invalid(field, "invalid_text"));
+    }
+    Ok(())
+}
+
+fn runtime_projection_invalid(field: &str, reason: &str) -> AppError {
+    AppError::coded_with(
+        "runtime_projection_invalid",
+        [("field", field), ("reason", reason)],
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1082,6 +1493,46 @@ mod tests {
         ));
         fs::create_dir_all(&root).expect("root");
         root.join("launcher.db")
+    }
+
+    fn activate_test_revision(
+        storage: &Storage,
+        profile_id: &str,
+        revision_id: &str,
+    ) -> RevisionRecord {
+        storage.create_profile(profile_id).expect("profile");
+        let operation_id = format!("operation-{revision_id}");
+        storage
+            .insert_operation(&OperationRecord {
+                id: operation_id.clone(),
+                operation_type: OperationType::ProfileRevision,
+                profile_id: Some(profile_id.to_string()),
+                state: OperationState::Planned,
+                planned_changes_json: "{}".into(),
+                staging_relative_path: format!("{operation_id}/revision"),
+                previous_revision_id: None,
+                target_revision_id: Some(revision_id.to_string()),
+                started_at_unix: 1,
+                completed_at_unix: None,
+                error_code: None,
+                error_params_json: None,
+            })
+            .expect("operation");
+        let revision = RevisionRecord {
+            id: revision_id.to_string(),
+            profile_id: profile_id.to_string(),
+            operation_id,
+            manifest_sha256: "a".repeat(64),
+            lock_sha256: "b".repeat(64),
+            manifest_relative_path: format!("{profile_id}/revisions/{revision_id}/manifest.json"),
+            lock_relative_path: format!("{profile_id}/revisions/{revision_id}/lock.json"),
+            status: "committed".into(),
+            created_at_unix: 1,
+        };
+        storage
+            .activate_revision(&revision, None)
+            .expect("activate revision");
+        revision
     }
 
     #[test]
@@ -1210,6 +1661,206 @@ mod tests {
             );
             let _ = fs::remove_dir_all(path.parent().expect("parent"));
         }
+    }
+
+    #[test]
+    fn phase5_migration_from_v5_does_not_invent_runtime_rows() {
+        let path = test_path();
+        let connection = Connection::open(&path).expect("open");
+        connection
+            .execute_batch(
+                "CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL, applied_at_unix INTEGER NOT NULL);",
+            )
+            .expect("migration table");
+        for migration in migrations::MIGRATIONS
+            .iter()
+            .filter(|migration| migration.version <= 5)
+        {
+            connection
+                .transaction(|transaction| {
+                    transaction.execute_batch(migration.sql)?;
+                    transaction.execute(
+                        "INSERT INTO schema_migrations(version, name, applied_at_unix) VALUES (?1, ?2, 0)",
+                        &[
+                            Value::Integer(migration.version),
+                            Value::from(migration.name),
+                        ],
+                    )?;
+                    Ok(())
+                })
+                .expect("apply v5 migration");
+        }
+        connection
+            .execute_batch(
+                "INSERT INTO profiles(
+                    id, lifecycle_state, active_revision_id, created_at_unix, updated_at_unix,
+                    archived_at_unix, deleted_at_unix
+                 ) VALUES ('legacy-runtime', 'active', NULL, 17, 17, NULL, NULL);
+                 INSERT INTO profile_metadata(
+                    profile_id, display_name, favorite, verification_state, trashed_from_state
+                 ) VALUES ('legacy-runtime', 'Legacy runtime', 0, 'verified', NULL);
+                 INSERT INTO profile_lineage(profile_id, source_profile_id, duplicated_at_unix)
+                 VALUES ('legacy-runtime', NULL, 17);
+                 INSERT INTO operations(
+                    id, operation_type, profile_id, state, planned_changes_json,
+                    staging_relative_path, previous_revision_id, target_revision_id,
+                    started_at_unix, completed_at_unix, error_code, error_params_json
+                 ) VALUES (
+                    'legacy-operation', 'profile-revision', 'legacy-runtime', 'completed', '{}',
+                    'legacy-operation/revision', NULL, 'legacy-revision', 17, 18, NULL, NULL
+                 );
+                 INSERT INTO profile_revisions(
+                    id, profile_id, operation_id, manifest_sha256, lock_sha256,
+                    manifest_relative_path, lock_relative_path, status, created_at_unix
+                 ) VALUES (
+                    'legacy-revision', 'legacy-runtime', 'legacy-operation',
+                    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                    'legacy-runtime/revisions/legacy-revision/manifest.json',
+                    'legacy-runtime/revisions/legacy-revision/lock.json', 'committed', 18
+                 );
+                 UPDATE profiles
+                 SET active_revision_id = 'legacy-revision'
+                 WHERE id = 'legacy-runtime';",
+            )
+            .expect("legacy profile and revision");
+        drop(connection);
+
+        let storage = Storage::initialize_for_test(&path).expect("phase5 migration");
+        assert_eq!(
+            storage.schema_version().expect("version"),
+            LATEST_SCHEMA_VERSION
+        );
+        assert!(storage
+            .runtime_projections()
+            .expect("runtime projections")
+            .is_empty());
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    #[test]
+    fn runtime_projection_crud_and_validation_are_atomic() {
+        let path = test_path();
+        let storage = Storage::initialize_for_test(&path).expect("initialize");
+        let first_revision =
+            activate_test_revision(&storage, "runtime-profile", "runtime-revision");
+        let other_revision = activate_test_revision(&storage, "other-profile", "other-revision");
+        let projection = RuntimeQueryProjection {
+            profile_id: first_revision.profile_id.clone(),
+            revision_id: first_revision.id.clone(),
+            minecraft_version: "1.21.1".into(),
+            loader_kind: "fabric".into(),
+            loader_version: Some("0.16.10".into()),
+            component_id: Some("s9lab-client".into()),
+            component_version: Some("1.0.8".into()),
+            install_state: "configured".into(),
+            updated_at_unix: 23,
+        };
+
+        storage
+            .upsert_runtime_projection(&projection)
+            .expect("insert projection");
+        assert_eq!(
+            storage
+                .runtime_projection("runtime-profile")
+                .expect("query")
+                .expect("projection"),
+            projection
+        );
+        assert_eq!(
+            storage.runtime_projections().expect("list"),
+            vec![projection.clone()]
+        );
+
+        let mut mismatched = projection.clone();
+        mismatched.revision_id = other_revision.id;
+        mismatched.minecraft_version = "1.21.2".into();
+        assert!(storage.upsert_runtime_projection(&mismatched).is_err());
+        assert_eq!(
+            storage
+                .runtime_projection("runtime-profile")
+                .expect("query after rejected update")
+                .expect("unchanged projection"),
+            projection
+        );
+
+        let mut invalid = projection.clone();
+        invalid.loader_kind = "vanilla".into();
+        assert!(storage.upsert_runtime_projection(&invalid).is_err());
+        invalid.loader_version = None;
+        invalid.component_version = None;
+        assert!(storage.upsert_runtime_projection(&invalid).is_err());
+        invalid.component_id = None;
+        invalid.install_state = "unknown".into();
+        assert!(storage.upsert_runtime_projection(&invalid).is_err());
+
+        assert!(storage
+            .delete_runtime_projection("runtime-profile")
+            .expect("delete"));
+        assert!(!storage
+            .delete_runtime_projection("runtime-profile")
+            .expect("idempotent delete"));
+        assert!(storage
+            .runtime_projection("runtime-profile")
+            .expect("query deleted")
+            .is_none());
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    #[test]
+    fn runtime_projection_enforces_committed_revision_ownership_and_invalidation() {
+        let path = test_path();
+        let storage = Storage::initialize_for_test(&path).expect("initialize");
+        let revision = activate_test_revision(&storage, "owner-profile", "owner-revision");
+        activate_test_revision(&storage, "foreign-profile", "foreign-revision");
+        let connection = storage.open().expect("connection");
+
+        let cross_profile = connection.execute(
+            "INSERT INTO profile_runtime_projection(
+                profile_id, revision_id, minecraft_version, loader_kind, loader_version,
+                component_id, component_version, install_state, updated_at_unix
+             ) VALUES (?1, ?2, '1.21.1', 'vanilla', NULL, NULL, NULL, 'configured', 1)",
+            &[
+                Value::from("owner-profile"),
+                Value::from("foreign-revision"),
+            ],
+        );
+        assert!(cross_profile.is_err());
+
+        storage
+            .upsert_runtime_projection(&RuntimeQueryProjection {
+                profile_id: revision.profile_id.clone(),
+                revision_id: revision.id.clone(),
+                minecraft_version: "1.21.1".into(),
+                loader_kind: "vanilla".into(),
+                loader_version: None,
+                component_id: None,
+                component_version: None,
+                install_state: "installed".into(),
+                updated_at_unix: 2,
+            })
+            .expect("valid projection");
+        storage
+            .restore_active_revision(&revision.profile_id, &revision.id, None)
+            .expect("invalidate active revision");
+        assert!(storage
+            .runtime_projection(&revision.profile_id)
+            .expect("query invalidated projection")
+            .is_none());
+
+        let invalidated = connection.execute(
+            "INSERT INTO profile_runtime_projection(
+                profile_id, revision_id, minecraft_version, loader_kind, loader_version,
+                component_id, component_version, install_state, updated_at_unix
+             ) VALUES (?1, ?2, '1.21.1', 'vanilla', NULL, NULL, NULL, 'configured', 3)",
+            &[
+                Value::from(revision.profile_id.as_str()),
+                Value::from(revision.id.as_str()),
+            ],
+        );
+        assert!(invalidated.is_err());
+        drop(connection);
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
     }
 
     #[test]

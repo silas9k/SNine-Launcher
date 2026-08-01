@@ -4,7 +4,7 @@ use crate::{
 };
 use chrono::Utc;
 
-pub const LATEST_SCHEMA_VERSION: i64 = 5;
+pub const LATEST_SCHEMA_VERSION: i64 = 6;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Migration {
@@ -234,6 +234,100 @@ ON profiles(lifecycle_state, updated_at_unix DESC, id);
 
 CREATE INDEX idx_cache_blobs_state_created
 ON cache_blobs(state, created_at_unix, sha256);
+"#,
+    },
+    Migration {
+        version: 6,
+        name: "phase5_profile_runtime_projection",
+        sql: r#"
+CREATE UNIQUE INDEX idx_profile_revisions_profile_id_id
+ON profile_revisions(profile_id, id);
+
+CREATE TABLE profile_runtime_projection (
+    profile_id TEXT PRIMARY KEY NOT NULL,
+    revision_id TEXT NOT NULL,
+    minecraft_version TEXT NOT NULL
+        CHECK (
+            minecraft_version = trim(minecraft_version) AND
+            length(minecraft_version) BETWEEN 1 AND 64
+        ),
+    loader_kind TEXT NOT NULL
+        CHECK (loader_kind IN ('vanilla', 'fabric', 'neoforge')),
+    loader_version TEXT NULL,
+    component_id TEXT NULL,
+    component_version TEXT NULL,
+    install_state TEXT NOT NULL
+        CHECK (install_state IN ('configured', 'installed', 'repair-required')),
+    updated_at_unix INTEGER NOT NULL CHECK (updated_at_unix >= 0),
+    CHECK (
+        (loader_kind = 'vanilla' AND loader_version IS NULL) OR
+        (
+            loader_kind IN ('fabric', 'neoforge') AND
+            loader_version IS NOT NULL AND
+            loader_version = trim(loader_version) AND
+            length(loader_version) BETWEEN 1 AND 128
+        )
+    ),
+    CHECK (
+        (component_id IS NULL AND component_version IS NULL) OR
+        (
+            component_id IS NOT NULL AND
+            component_version IS NOT NULL AND
+            component_id = trim(component_id) AND
+            component_version = trim(component_version) AND
+            length(component_id) BETWEEN 1 AND 128 AND
+            length(component_version) BETWEEN 1 AND 128
+        )
+    ),
+    FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE,
+    FOREIGN KEY (profile_id, revision_id)
+        REFERENCES profile_revisions(profile_id, id)
+        ON UPDATE RESTRICT
+        ON DELETE CASCADE
+        DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE INDEX idx_profile_runtime_projection_revision
+ON profile_runtime_projection(revision_id, profile_id);
+
+CREATE INDEX idx_profile_runtime_projection_install_state
+ON profile_runtime_projection(install_state, updated_at_unix DESC, profile_id);
+
+CREATE TRIGGER profile_runtime_projection_revision_insert_guard
+BEFORE INSERT ON profile_runtime_projection
+BEGIN
+    SELECT CASE
+        WHEN NOT EXISTS (
+            SELECT 1 FROM profile_revisions
+            WHERE id = NEW.revision_id
+              AND profile_id = NEW.profile_id
+              AND status = 'committed'
+        )
+        THEN RAISE(ABORT, 'runtime revision does not belong to profile or is not committed')
+    END;
+END;
+
+CREATE TRIGGER profile_runtime_projection_revision_update_guard
+BEFORE UPDATE OF profile_id, revision_id ON profile_runtime_projection
+BEGIN
+    SELECT CASE
+        WHEN NOT EXISTS (
+            SELECT 1 FROM profile_revisions
+            WHERE id = NEW.revision_id
+              AND profile_id = NEW.profile_id
+              AND status = 'committed'
+        )
+        THEN RAISE(ABORT, 'runtime revision does not belong to profile or is not committed')
+    END;
+END;
+
+CREATE TRIGGER profile_runtime_projection_revision_invalidation
+AFTER UPDATE OF status ON profile_revisions
+WHEN NEW.status <> 'committed'
+BEGIN
+    DELETE FROM profile_runtime_projection
+    WHERE revision_id = NEW.id AND profile_id = NEW.profile_id;
+END;
 "#,
     },
 ];

@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 import {
   forbiddenCopyMechanisms,
   inspectPhase4ProfileIsolation,
+  latestSchemaVersion,
   permanentQuarantineDeletion,
+  phase4MigrationIsCanonical,
 } from "../../scripts/check-phase4-profile-isolation.mjs";
 
 test("phase4 project passes the complete profile-isolation and cache-safety gate", () => {
@@ -26,4 +29,24 @@ test("cache quarantine rejects permanent deletion before a safety period exists"
 
 test("test-only fixture cleanup does not count as a product cache deletion policy", () => {
   assert.equal(permanentQuarantineDeletion("#[cfg(test)]\nmod tests { fs::remove_dir_all(root); }"), false);
+});
+
+test("phase4 guard accepts later schemas without allowing migration 5 rewrites", () => {
+  const migrations = fs.readFileSync("src-tauri/src/storage/migrations.rs", "utf8");
+  const current = latestSchemaVersion(migrations);
+  assert.ok(current >= 6);
+  assert.equal(phase4MigrationIsCanonical(migrations), true);
+
+  const future = migrations.replace(
+    /LATEST_SCHEMA_VERSION:\s*i64\s*=\s*\d+\b/,
+    "LATEST_SCHEMA_VERSION: i64 = 12",
+  );
+  assert.equal(latestSchemaVersion(future), 12);
+  assert.equal(phase4MigrationIsCanonical(future), true);
+
+  const rewrittenPhase4 = migrations.replace(
+    "CREATE TABLE profile_metadata",
+    "CREATE TABLE rewritten_profile_metadata",
+  );
+  assert.equal(phase4MigrationIsCanonical(rewrittenPhase4), false);
 });

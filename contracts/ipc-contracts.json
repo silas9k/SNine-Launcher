@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "types": {
     "Phase1CoreStatus": {
       "schemaVersion": "number",
@@ -98,6 +98,109 @@
       "restoredThisRun": "number",
       "retainedInQuarantine": "number",
       "deletionPolicy": "\"unconfigured\""
+    },
+    "Phase5CapabilityStatus": {
+      "capabilityId": "string",
+      "state": "\"available\" | \"unconfigured\" | \"disabled\"",
+      "reasonCode": "string"
+    },
+    "Phase5MinecraftCatalogEntry": {
+      "version": "string",
+      "releaseType": "\"release\" | \"snapshot\""
+    },
+    "Phase5LoaderCatalogEntry": {
+      "version": "string",
+      "stable": "boolean"
+    },
+    "Phase5RuntimeCatalog": {
+      "minecraftVersions": "Phase5MinecraftCatalogEntry[]",
+      "fabricVersions": "Phase5LoaderCatalogEntry[]",
+      "neoforgeCapability": "Phase5CapabilityStatus",
+      "s9labComponentCapability": "Phase5CapabilityStatus"
+    },
+    "Phase5LoaderSelection": {
+      "kind": "\"vanilla\" | \"fabric\" | \"neoforge\"",
+      "loaderVersion?": "string"
+    },
+    "Phase5JavaPolicy": {
+      "mode": "\"managed\" | \"system\"",
+      "majorVersion": "17 | 21"
+    },
+    "Phase5RuntimeIntent": {
+      "minecraftVersion": "string",
+      "loader": "Phase5LoaderSelection",
+      "java": "Phase5JavaPolicy"
+    },
+    "Phase5ComponentCatalogEntry": {
+      "componentId": "string",
+      "componentVersion": "string",
+      "minecraftVersion": "string",
+      "loader": "Phase5LoaderSelection",
+      "sizeBytes": "number",
+      "sha256": "string"
+    },
+    "Phase5ComponentCatalog": {
+      "capability": "Phase5CapabilityStatus",
+      "entries": "Phase5ComponentCatalogEntry[]"
+    },
+    "Phase5ComponentSelection": {
+      "mode": "\"disabled\" | \"catalog\"",
+      "componentId?": "string",
+      "componentVersion?": "string"
+    },
+    "Phase5InstalledComponent": {
+      "componentId": "string",
+      "componentVersion": "string"
+    },
+    "Phase5LaunchStatus": {
+      "launchId": "string",
+      "profileId": "string",
+      "state": "\"starting\" | \"running\" | \"stopping\" | \"exited\" | \"failed\"",
+      "processId": "number | null",
+      "accountName": "string",
+      "startedAtUnix": "number",
+      "exitCode": "number | null"
+    },
+    "Phase5RuntimeStatus": {
+      "profileId": "string",
+      "activeRevisionId": "string",
+      "lifecycleState": "\"active\" | \"archived\" | \"trash\"",
+      "installState": "\"not-configured\" | \"configured\" | \"installed\" | \"repair-required\"",
+      "runtime": "Phase5RuntimeIntent | null",
+      "component": "Phase5InstalledComponent | null",
+      "launches": "Phase5LaunchStatus[]",
+      "s9labComponentCapability": "Phase5CapabilityStatus"
+    },
+    "Phase5OperationResult": {
+      "operationId": "string",
+      "profileId": "string",
+      "revisionId": "string",
+      "installState": "\"installed\""
+    },
+    "Phase5CatalogInput": {
+      "minecraftVersion": "string | null"
+    },
+    "Phase5ComponentCatalogInput": {
+      "intent": "Phase5RuntimeIntent"
+    },
+    "Phase5ProfileIdInput": {
+      "profileId": "string"
+    },
+    "Phase5InstallInput": {
+      "profileId": "string",
+      "intent": "Phase5RuntimeIntent",
+      "component": "Phase5ComponentSelection"
+    },
+    "Phase5LaunchInput": {
+      "profileId": "string",
+      "memoryMb": "number"
+    },
+    "Phase5StopInput": {
+      "launchId": "string"
+    },
+    "Phase5ComponentChangeInput": {
+      "profileId": "string",
+      "selection": "Phase5ComponentSelection"
     }
   },
   "commands": [
@@ -219,6 +322,60 @@
       "name": "phase4_quarantine_unreferenced_cache",
       "inputType": null,
       "outputType": "Phase4CacheGcReport",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase5_runtime_catalog",
+      "inputType": "Phase5CatalogInput",
+      "outputType": "Phase5RuntimeCatalog",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase5_s9lab_component_catalog",
+      "inputType": "Phase5ComponentCatalogInput",
+      "outputType": "Phase5ComponentCatalog",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase5_profile_runtime_status",
+      "inputType": "Phase5ProfileIdInput",
+      "outputType": "Phase5RuntimeStatus",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase5_install_profile",
+      "inputType": "Phase5InstallInput",
+      "outputType": "Phase5OperationResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase5_repair_profile",
+      "inputType": "Phase5ProfileIdInput",
+      "outputType": "Phase5OperationResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase5_launch_profile",
+      "inputType": "Phase5LaunchInput",
+      "outputType": "Phase5LaunchStatus",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase5_stop_launch",
+      "inputType": "Phase5StopInput",
+      "outputType": "Phase5LaunchStatus",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase5_launch_statuses",
+      "inputType": null,
+      "outputType": "Phase5LaunchStatus[]",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase5_set_s9lab_component",
+      "inputType": "Phase5ComponentChangeInput",
+      "outputType": "Phase5OperationResult",
       "errorType": "TypedIpcError"
     }
   ]

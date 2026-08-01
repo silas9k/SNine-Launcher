@@ -44,7 +44,7 @@ export function TaskCenter() {
   return (
     <>
       {open ? <button className="task-center__scrim" aria-label={t("tasks.close")} onClick={() => setOpen(false)} /> : null}
-      <aside ref={panel} className={`task-center ${open ? "task-center--open" : ""}`} role="dialog" aria-modal={open || undefined} aria-hidden={!open} aria-label={t("tasks.title")}>
+      <aside ref={panel} className={`task-center ${open ? "task-center--open" : ""}`} role="dialog" aria-modal={open || undefined} aria-hidden={!open} inert={!open} aria-label={t("tasks.title")}>
         <header><div><h2>{t("tasks.title")}</h2><p>{t("tasks.description")}</p></div><IconButton label={t("tasks.close")} onClick={() => setOpen(false)}><X aria-hidden="true" /></IconButton></header>
         <div className="task-center__body"><EmptyState icon={<Download />} label={t("empty.previewLabel")} title={t("tasks.emptyTitle")} description={t("tasks.emptyDescription")} /></div>
       </aside>

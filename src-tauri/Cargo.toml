@@ -33,7 +33,14 @@ zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
 futures-util = "0.3"
 regex = "1"
 opener = "0.7"
+ring = "=0.17.14"
 
-
-
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+] }
 

@@ -38,7 +38,8 @@ pub struct ResolvedDownload {
     url: reqwest::Url,
     target_relative_path: String,
     expected_size_bytes: u64,
-    expected_sha256: String,
+    expected_sha1: Option<String>,
+    expected_sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -85,6 +86,8 @@ impl DownloadService {
                     ProviderId::Mojang,
                     ProviderPolicy {
                         allowed_hosts: vec![
+                            "piston-meta.mojang.com".into(),
+                            "launchermeta.mojang.com".into(),
                             "piston-data.mojang.com".into(),
                             "libraries.minecraft.net".into(),
                             "resources.download.minecraft.net".into(),
@@ -178,7 +181,57 @@ impl DownloadService {
             url,
             target_relative_path: target_relative_path.to_string(),
             expected_size_bytes,
-            expected_sha256: expected_sha256.to_string(),
+            expected_sha1: None,
+            expected_sha256: Some(expected_sha256.to_string()),
+        })
+    }
+
+    pub(crate) fn resolve_upstream_sha1(
+        &self,
+        provider: ProviderId,
+        url: &str,
+        target_relative_path: &str,
+        expected_size_bytes: u64,
+        expected_sha1: &str,
+    ) -> AppResult<ResolvedDownload> {
+        validate_sha1(expected_sha1)?;
+        let mut resolved =
+            self.resolve_common(provider, url, target_relative_path, expected_size_bytes)?;
+        resolved.expected_sha1 = Some(expected_sha1.to_string());
+        Ok(resolved)
+    }
+
+    fn resolve_common(
+        &self,
+        provider: ProviderId,
+        url: &str,
+        target_relative_path: &str,
+        expected_size_bytes: u64,
+    ) -> AppResult<ResolvedDownload> {
+        let policy = self
+            .policies
+            .get(&provider)
+            .ok_or_else(|| AppError::coded("download_provider_unknown"))?;
+        let url = validate_provider_url(policy, url)?;
+        if expected_size_bytes == 0 || expected_size_bytes > policy.max_size_bytes {
+            return Err(AppError::coded_with(
+                "download_size_limit",
+                [
+                    ("expected", expected_size_bytes.to_string()),
+                    ("maximum", policy.max_size_bytes.to_string()),
+                ],
+            ));
+        }
+        let _ = self
+            .registry
+            .resolve("staging-operations", target_relative_path)?;
+        Ok(ResolvedDownload {
+            provider,
+            url,
+            target_relative_path: target_relative_path.to_string(),
+            expected_size_bytes,
+            expected_sha1: None,
+            expected_sha256: None,
         })
     }
 
@@ -261,9 +314,11 @@ impl DownloadService {
             partial,
             file: Some(file),
             expected_size: request.expected_size_bytes,
+            expected_sha1: request.expected_sha1.clone(),
             expected_sha256: request.expected_sha256.clone(),
             written: 0,
-            hasher: sha2::Sha256::new(),
+            sha1_hasher: sha1::Sha1::new(),
+            sha256_hasher: sha2::Sha256::new(),
             cancellation,
             committed: false,
         })
@@ -282,8 +337,10 @@ impl DownloadService {
             url: reqwest::Url::parse("https://cdn.modrinth.com/test").expect("url"),
             target_relative_path: target.into(),
             expected_size_bytes: expected_size_override.unwrap_or(expected.len() as u64),
-            expected_sha256: hash_override
-                .unwrap_or_else(|| crate::operations::model::sha256_hex(expected)),
+            expected_sha1: None,
+            expected_sha256: Some(
+                hash_override.unwrap_or_else(|| crate::operations::model::sha256_hex(expected)),
+            ),
         }
     }
 }
@@ -293,9 +350,11 @@ struct DownloadSession {
     partial: SecurePath,
     file: Option<std::fs::File>,
     expected_size: u64,
-    expected_sha256: String,
+    expected_sha1: Option<String>,
+    expected_sha256: Option<String>,
     written: u64,
-    hasher: sha2::Sha256,
+    sha1_hasher: sha1::Sha1,
+    sha256_hasher: sha2::Sha256,
     cancellation: CancellationToken,
     committed: bool,
 }
@@ -316,7 +375,8 @@ impl DownloadSession {
             .as_mut()
             .ok_or_else(|| AppError::coded("download_session_closed"))?
             .write_all(bytes)?;
-        self.hasher.update(bytes);
+        self.sha1_hasher.update(bytes);
+        self.sha256_hasher.update(bytes);
         self.written = next;
         Ok(())
     }
@@ -328,8 +388,17 @@ impl DownloadSession {
         if self.written != self.expected_size {
             return Err(AppError::coded("download_size_mismatch"));
         }
-        let actual_hash = hex::encode(self.hasher.clone().finalize());
-        if actual_hash != self.expected_sha256 {
+        let actual_sha1 = hex::encode(self.sha1_hasher.clone().finalize());
+        let actual_sha256 = hex::encode(self.sha256_hasher.clone().finalize());
+        if self
+            .expected_sha1
+            .as_deref()
+            .is_some_and(|expected| expected != actual_sha1)
+            || self
+                .expected_sha256
+                .as_deref()
+                .is_some_and(|expected| expected != actual_sha256)
+        {
             return Err(AppError::coded("download_hash_mismatch"));
         }
         let file = self
@@ -343,7 +412,7 @@ impl DownloadSession {
         Ok(DownloadResult {
             target_relative_path: self.target.relative().display().to_string(),
             size_bytes: self.written,
-            sha256: actual_hash,
+            sha256: actual_sha256,
         })
     }
 }
@@ -366,6 +435,42 @@ fn validate_sha256(value: &str) -> AppResult<()> {
         return Err(AppError::coded("download_sha256_invalid"));
     }
     Ok(())
+}
+
+fn validate_sha1(value: &str) -> AppResult<()> {
+    if value.len() != 40
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(AppError::coded("download_sha1_invalid"));
+    }
+    Ok(())
+}
+
+fn validate_provider_url(policy: &ProviderPolicy, value: &str) -> AppResult<reqwest::Url> {
+    let url = reqwest::Url::parse(value).map_err(|_| AppError::coded("download_url_invalid"))?;
+    if url.scheme() != "https" {
+        return Err(AppError::coded("download_https_required"));
+    }
+    if !url.username().is_empty() || url.password().is_some() || url.fragment().is_some() {
+        return Err(AppError::coded(
+            "download_url_credentials_or_fragment_forbidden",
+        ));
+    }
+    if url.port_or_known_default() != Some(443) {
+        return Err(AppError::coded("download_port_not_allowed"));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| AppError::coded("download_host_missing"))?;
+    if !policy.allowed_hosts.iter().any(|allowed| allowed == host) {
+        return Err(AppError::coded_with(
+            "download_domain_not_allowed",
+            [("host", host.to_string())],
+        ));
+    }
+    Ok(url)
 }
 
 #[cfg(test)]

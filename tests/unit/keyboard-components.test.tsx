@@ -2,7 +2,7 @@ import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Button, DropdownMenu, MenuItem, Tabs } from "../../src/components/ui";
+import { Button, DropdownMenu, MenuItem, SelectField, Tabs } from "../../src/components/ui";
 
 function TabsHarness() {
   const [value, setValue] = useState("first");
@@ -19,6 +19,7 @@ describe("keyboard-ready reusable controls", () => {
     await user.keyboard("{ArrowRight}");
     expect(second).toHaveFocus();
     expect(second).toHaveAttribute("aria-selected", "true");
+    expect(first.closest("[role='tablist']")).toHaveAttribute("aria-orientation", "horizontal");
   });
 
   it("opens a dropdown from the keyboard and restores trigger focus on Escape", async () => {
@@ -31,5 +32,13 @@ describe("keyboard-ready reusable controls", () => {
     await user.keyboard("{Escape}");
     expect(trigger).toHaveFocus();
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("connects select descriptions to the native control", () => {
+    render(<SelectField label="Appearance" description="Choose a theme"><option>Dark</option></SelectField>);
+    const select = screen.getByRole("combobox", { name: "Appearance" });
+    const description = screen.getByText("Choose a theme");
+    expect(description).toHaveAttribute("id");
+    expect(select).toHaveAttribute("aria-describedby", description.id);
   });
 });

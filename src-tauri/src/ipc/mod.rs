@@ -10,7 +10,7 @@ use crate::{
 };
 use serde::Serialize;
 
-pub const IPC_CONTRACT_VERSION: u32 = 4;
+pub const IPC_CONTRACT_VERSION: u32 = 5;
 pub const PHASE1_CORE_STATUS_COMMAND: &str = "phase1_core_status";
 pub const PHASE2_SHELL_BOOTSTRAP_COMMAND: &str = "phase2_shell_bootstrap";
 pub const PHASE2_SAVE_SHELL_SETTINGS_COMMAND: &str = "phase2_save_shell_settings";
@@ -31,6 +31,15 @@ pub const PHASE4_RESTORE_PROFILE_COMMAND: &str = "phase4_restore_profile";
 pub const PHASE4_SET_PROFILE_FAVORITE_COMMAND: &str = "phase4_set_profile_favorite";
 pub const PHASE4_CACHE_GC_PREVIEW_COMMAND: &str = "phase4_cache_gc_preview";
 pub const PHASE4_QUARANTINE_CACHE_COMMAND: &str = "phase4_quarantine_unreferenced_cache";
+pub const PHASE5_RUNTIME_CATALOG_COMMAND: &str = "phase5_runtime_catalog";
+pub const PHASE5_S9LAB_COMPONENT_CATALOG_COMMAND: &str = "phase5_s9lab_component_catalog";
+pub const PHASE5_PROFILE_RUNTIME_STATUS_COMMAND: &str = "phase5_profile_runtime_status";
+pub const PHASE5_INSTALL_PROFILE_COMMAND: &str = "phase5_install_profile";
+pub const PHASE5_REPAIR_PROFILE_COMMAND: &str = "phase5_repair_profile";
+pub const PHASE5_LAUNCH_PROFILE_COMMAND: &str = "phase5_launch_profile";
+pub const PHASE5_STOP_LAUNCH_COMMAND: &str = "phase5_stop_launch";
+pub const PHASE5_LAUNCH_STATUSES_COMMAND: &str = "phase5_launch_statuses";
+pub const PHASE5_SET_S9LAB_COMPONENT_COMMAND: &str = "phase5_set_s9lab_component";
 pub const TYPED_IPC_ERROR_FIELDS: &[&str] = &["code", "messageKey", "params"];
 
 #[derive(Debug, Clone, Serialize)]
@@ -297,6 +306,116 @@ pub async fn phase4_quarantine_unreferenced_cache(
         .map_err(Into::into)
 }
 
+#[tauri::command]
+pub async fn phase5_runtime_catalog(
+    window: tauri::Window,
+    runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
+    minecraft_version: Option<String>,
+) -> Result<crate::minecraft::service::Phase5RuntimeCatalog, IpcError> {
+    authorize_main_window(&window)?;
+    runtime
+        .catalog(minecraft_version.as_deref())
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase5_s9lab_component_catalog(
+    window: tauri::Window,
+    runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
+    intent: crate::runtime::ProfileRuntimeIntent,
+) -> Result<crate::minecraft::service::Phase5ComponentCatalog, IpcError> {
+    authorize_main_window(&window)?;
+    runtime.component_catalog(intent).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase5_profile_runtime_status(
+    window: tauri::Window,
+    runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
+    profile_id: String,
+) -> Result<crate::minecraft::service::Phase5RuntimeStatus, IpcError> {
+    authorize_main_window(&window)?;
+    runtime.status(&profile_id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase5_install_profile(
+    window: tauri::Window,
+    runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
+    profile_id: String,
+    intent: crate::runtime::ProfileRuntimeIntent,
+    component: crate::profiles::model::S9labComponentSelection,
+) -> Result<crate::minecraft::service::RuntimeOperationResult, IpcError> {
+    authorize_main_window(&window)?;
+    runtime
+        .install(&profile_id, intent, component)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase5_repair_profile(
+    window: tauri::Window,
+    runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
+    profile_id: String,
+) -> Result<crate::minecraft::service::RuntimeOperationResult, IpcError> {
+    authorize_main_window(&window)?;
+    let runtime = runtime.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || runtime.repair(&profile_id))
+        .await
+        .map_err(|_| IpcError::from(AppError::coded("runtime_worker_failed")))?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase5_launch_profile(
+    window: tauri::Window,
+    runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
+    auth: tauri::State<'_, AuthService>,
+    profile_id: String,
+    memory_mb: u32,
+) -> Result<crate::minecraft::profile_launch::ProfileLaunchStatus, IpcError> {
+    authorize_main_window(&window)?;
+    runtime
+        .launch(auth.inner(), &profile_id, memory_mb)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase5_stop_launch(
+    window: tauri::Window,
+    runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
+    launch_id: String,
+) -> Result<crate::minecraft::profile_launch::ProfileLaunchStatus, IpcError> {
+    authorize_main_window(&window)?;
+    runtime.stop(&launch_id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase5_launch_statuses(
+    window: tauri::Window,
+    runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
+) -> Result<Vec<crate::minecraft::profile_launch::ProfileLaunchStatus>, IpcError> {
+    authorize_main_window(&window)?;
+    runtime.launch_statuses().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase5_set_s9lab_component(
+    window: tauri::Window,
+    runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
+    profile_id: String,
+    selection: crate::profiles::model::S9labComponentSelection,
+) -> Result<crate::minecraft::service::RuntimeOperationResult, IpcError> {
+    authorize_main_window(&window)?;
+    runtime
+        .change_component(&profile_id, selection)
+        .await
+        .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,6 +462,15 @@ mod tests {
             PHASE4_SET_PROFILE_FAVORITE_COMMAND,
             PHASE4_CACHE_GC_PREVIEW_COMMAND,
             PHASE4_QUARANTINE_CACHE_COMMAND,
+            PHASE5_RUNTIME_CATALOG_COMMAND,
+            PHASE5_S9LAB_COMPONENT_CATALOG_COMMAND,
+            PHASE5_PROFILE_RUNTIME_STATUS_COMMAND,
+            PHASE5_INSTALL_PROFILE_COMMAND,
+            PHASE5_REPAIR_PROFILE_COMMAND,
+            PHASE5_LAUNCH_PROFILE_COMMAND,
+            PHASE5_STOP_LAUNCH_COMMAND,
+            PHASE5_LAUNCH_STATUSES_COMMAND,
+            PHASE5_SET_S9LAB_COMPONENT_COMMAND,
         ];
         for command_name in expected {
             let command = contract

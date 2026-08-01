@@ -97,6 +97,10 @@ impl CoreServices {
                 path: paths.backups.clone(),
             },
             RegisteredRoot {
+                id: "runtimes".into(),
+                path: paths.runtimes.clone(),
+            },
+            RegisteredRoot {
                 id: "launcher-logs".into(),
                 path: paths.launcher_logs.clone(),
             },

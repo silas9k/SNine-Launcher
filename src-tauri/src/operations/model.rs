@@ -1,4 +1,7 @@
-use crate::error::{AppError, AppResult};
+use crate::{
+    error::{AppError, AppResult},
+    storage::models::RuntimeQueryProjection,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -94,6 +97,9 @@ impl OperationState {
 pub enum OperationType {
     SimulatedProfileInstall,
     ProfileRevision,
+    RuntimeInstall,
+    RuntimeRepair,
+    ComponentChange,
 }
 
 impl OperationType {
@@ -101,6 +107,9 @@ impl OperationType {
         match self {
             Self::SimulatedProfileInstall => "simulated-profile-install",
             Self::ProfileRevision => "profile-revision",
+            Self::RuntimeInstall => "runtime-install",
+            Self::RuntimeRepair => "runtime-repair",
+            Self::ComponentChange => "component-change",
         }
     }
 
@@ -108,6 +117,9 @@ impl OperationType {
         match value {
             "simulated-profile-install" => Ok(Self::SimulatedProfileInstall),
             "profile-revision" => Ok(Self::ProfileRevision),
+            "runtime-install" => Ok(Self::RuntimeInstall),
+            "runtime-repair" => Ok(Self::RuntimeRepair),
+            "component-change" => Ok(Self::ComponentChange),
             _ => Err(AppError::coded_with(
                 "operation_type_unknown",
                 [("operationType", value.to_string())],
@@ -156,6 +168,14 @@ impl PlannedFile {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheMaterialization {
+    pub blob_sha256: String,
+    pub size_bytes: u64,
+    pub relative_path: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileInstallPlan {
@@ -168,6 +188,12 @@ pub struct ProfileInstallPlan {
     pub lock_json: String,
     pub lock_sha256: String,
     pub payload_files: Vec<PlannedFile>,
+    #[serde(default)]
+    pub cache_materializations: Vec<CacheMaterialization>,
+    #[serde(default)]
+    pub runtime_projection: Option<RuntimeQueryProjection>,
+    #[serde(default)]
+    pub previous_runtime_projection: Option<RuntimeQueryProjection>,
     #[serde(default)]
     pub cleanup_profile_on_rollback: bool,
 }
@@ -219,6 +245,9 @@ impl ProfileInstallPlan {
                 "instance/phase1-installed.txt",
                 "S9Lab Phase 1 simulated installation\n",
             )],
+            cache_materializations: Vec::new(),
+            runtime_projection: None,
+            previous_runtime_projection: None,
             cleanup_profile_on_rollback: false,
         })
     }
@@ -233,6 +262,7 @@ pub enum FailurePoint {
     AfterRevisionMoved,
     AfterDatabaseActivated,
     DuringValidation,
+    AfterCacheReferences,
 }
 
 impl FailurePoint {
@@ -245,6 +275,7 @@ impl FailurePoint {
             Self::AfterRevisionMoved => "after-revision-moved",
             Self::AfterDatabaseActivated => "after-database-activated",
             Self::DuringValidation => "during-validation",
+            Self::AfterCacheReferences => "after-cache-references",
         }
     }
 }
@@ -305,4 +336,42 @@ pub fn canonical_json<T: Serialize>(value: &T) -> AppResult<String> {
     let mut output = serde_json::to_string_pretty(value)?;
     output.push('\n');
     Ok(output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn operation_types_round_trip_through_persistence_names() {
+        for operation_type in [
+            OperationType::SimulatedProfileInstall,
+            OperationType::ProfileRevision,
+            OperationType::RuntimeInstall,
+            OperationType::RuntimeRepair,
+            OperationType::ComponentChange,
+        ] {
+            assert_eq!(
+                OperationType::parse(operation_type.as_str()).expect("parse operation type"),
+                operation_type
+            );
+        }
+    }
+
+    #[test]
+    fn plans_without_cache_materializations_remain_deserializable() {
+        let plan =
+            ProfileInstallPlan::new("profile-legacy", "Legacy plan", None).expect("create plan");
+        let mut value = serde_json::to_value(&plan).expect("serialize plan");
+        value
+            .as_object_mut()
+            .expect("plan object")
+            .remove("cacheMaterializations");
+
+        let decoded: ProfileInstallPlan =
+            serde_json::from_value(value).expect("deserialize legacy plan");
+        assert!(decoded.cache_materializations.is_empty());
+        assert_eq!(decoded.operation_id, plan.operation_id);
+        assert_eq!(decoded.revision_id, plan.revision_id);
+    }
 }

@@ -46,20 +46,6 @@ pub fn append(message: &str) -> AppResult<()> {
     Ok(())
 }
 
-pub fn read_last(limit: usize) -> AppResult<Vec<String>> {
-    let path = paths::launcher_paths()?.log_file;
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let raw = fs::read_to_string(path)?;
-    let lines: Vec<&str> = raw.lines().collect();
-    let start = lines.len().saturating_sub(limit.min(2_000));
-    Ok(lines[start..]
-        .iter()
-        .map(|line| redact_sensitive(line))
-        .collect())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

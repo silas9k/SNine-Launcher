@@ -3132,6 +3132,7 @@ dependencies = [
  "opener",
  "regex",
  "reqwest 0.12.28",
+ "ring",
  "serde",
  "serde_json",
  "sha1",
@@ -3141,6 +3142,7 @@ dependencies = [
  "tauri-plugin-opener",
  "thiserror 2.0.18",
  "tokio",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

@@ -301,6 +301,9 @@ fn build_profile_plan(
         lock_json,
         lock_sha256,
         payload_files: Vec::new(),
+        cache_materializations: Vec::new(),
+        runtime_projection: None,
+        previous_runtime_projection: None,
         cleanup_profile_on_rollback: true,
     })
 }

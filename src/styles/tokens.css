@@ -2,6 +2,7 @@
   color-scheme: dark;
   --font-ui: "Segoe UI Variable", "Segoe UI", Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-accent: "Cascadia Mono", "Segoe UI Mono", ui-monospace, monospace;
+  --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, ui-monospace, monospace;
 
   --color-neutral-0: #ffffff;
   --color-neutral-50: #f7f8fa;
@@ -52,8 +53,8 @@
   --radius-xl: 1.75rem;
   --radius-round: 999px;
 
-  --shadow-card: 0 1rem 2.5rem color-mix(in srgb, var(--color-black) 22%, transparent);
-  --shadow-float: 0 1.5rem 4rem color-mix(in srgb, var(--color-black) 38%, transparent);
+  --shadow-card: 0 0.6rem 1.8rem color-mix(in srgb, var(--color-black) 14%, transparent);
+  --shadow-float: 0 1rem 2.8rem color-mix(in srgb, var(--color-black) 30%, transparent);
   --shadow-focus: 0 0 0 0.2rem color-mix(in srgb, var(--color-focus) 34%, transparent);
 
   --duration-fast: 120ms;
@@ -67,9 +68,9 @@
   --z-dialog: 80;
   --z-toast: 90;
 
-  --titlebar-height: 3.25rem;
-  --navigation-width: 18.5rem;
-  --navigation-compact-width: 4.75rem;
+  --titlebar-height: 3rem;
+  --navigation-width: 16rem;
+  --navigation-compact-width: 4.25rem;
   --control-height: 2.75rem;
   --content-max: 120rem;
   --density-space: 1rem;
@@ -80,7 +81,7 @@
   --surface-secondary: var(--color-neutral-800);
   --surface-interactive: var(--color-neutral-800);
   --surface-hover: var(--color-neutral-700);
-  --surface-overlay: color-mix(in srgb, var(--color-neutral-950) 88%, transparent);
+  --surface-overlay: color-mix(in srgb, var(--color-neutral-950) 96%, var(--color-neutral-900));
   --text-primary: var(--color-neutral-50);
   --text-secondary: var(--color-neutral-300);
   --text-muted: var(--color-neutral-400);
@@ -106,8 +107,8 @@
   --text-muted: var(--color-neutral-500);
   --border-default: color-mix(in srgb, var(--color-neutral-900) 13%, transparent);
   --border-strong: color-mix(in srgb, var(--color-neutral-900) 24%, transparent);
-  --shadow-card: 0 1rem 2.5rem color-mix(in srgb, var(--color-neutral-900) 12%, transparent);
-  --shadow-float: 0 1.5rem 4rem color-mix(in srgb, var(--color-neutral-900) 22%, transparent);
+  --shadow-card: 0 0.6rem 1.8rem color-mix(in srgb, var(--color-neutral-900) 9%, transparent);
+  --shadow-float: 0 1rem 2.8rem color-mix(in srgb, var(--color-neutral-900) 18%, transparent);
 }
 
 :root[data-theme="contrast"] {

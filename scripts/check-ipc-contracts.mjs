@@ -1,7 +1,6 @@
 import fs from "node:fs";
 
 const wrapperFiles = [
-  "src/lib/commands.ts",
   ...fs.readdirSync("src/lib")
     .filter((file) => file.endsWith("Commands.ts"))
     .map((file) => `src/lib/${file}`),

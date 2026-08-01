@@ -20,6 +20,7 @@ pub struct LauncherPaths {
     pub staging_operations: PathBuf,
     pub migration: PathBuf,
     pub backups: PathBuf,
+    pub runtimes: PathBuf,
     pub logs: PathBuf,
     pub launcher_logs: PathBuf,
     pub database_file: PathBuf,
@@ -65,6 +66,7 @@ impl LauncherPaths {
         let staging_operations = staging.join("operations");
         let migration = root.join("migration");
         let backups = root.join("backups");
+        let runtimes = root.join("runtimes");
         let logs = root.join("logs");
         let launcher_logs = logs.join("launcher");
 
@@ -84,6 +86,7 @@ impl LauncherPaths {
             staging_operations,
             migration,
             backups,
+            runtimes,
             logs,
             launcher_logs,
         };
@@ -106,6 +109,7 @@ impl LauncherPaths {
             "staging-operations",
             "migration",
             "backups",
+            "runtimes",
             "launcher-logs",
         ] {
             let directory = registry.root(root_id)?;
@@ -126,6 +130,7 @@ impl LauncherPaths {
             &self.staging_operations,
             &self.migration,
             &self.backups,
+            &self.runtimes,
             &self.logs,
             &self.launcher_logs,
         ] {
@@ -205,6 +210,7 @@ mod phase1_tests {
             "staging/operations",
             "migration",
             "backups",
+            "runtimes",
             "logs/launcher",
         ] {
             assert!(root.join(expected).is_dir(), "missing {expected}");

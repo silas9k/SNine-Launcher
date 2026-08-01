@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::runtime::{ProfileRuntimeIntent, ResolvedRuntimeLockV1};
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileManifestV1 {
@@ -25,6 +27,93 @@ pub struct ProfileLockV1 {
     pub resolution_state: String,
     #[serde(default)]
     pub cache_blobs: Vec<LockedCacheBlob>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileManifestV2 {
+    pub format: String,
+    pub format_version: u32,
+    pub profile_id: String,
+    pub created_at_unix: i64,
+    pub runtime: ProfileRuntimeIntent,
+    pub s9lab_component: S9labComponentSelection,
+    pub mutable_directories: Vec<String>,
+    pub isolation_policy: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(
+    tag = "mode",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum S9labComponentSelection {
+    Disabled,
+    Catalog {
+        component_id: String,
+        component_version: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileLockV2 {
+    pub format: String,
+    pub format_version: u32,
+    pub profile_id: String,
+    pub revision_id: String,
+    pub manifest_sha256: String,
+    pub runtime: ResolvedRuntimeLockV1,
+    pub launch: ResolvedLaunchConfiguration,
+    #[serde(default)]
+    pub cache_blobs: Vec<LockedCacheBlob>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResolvedLaunchConfiguration {
+    pub main_class: String,
+    pub asset_index_id: String,
+    pub java_major_version: u16,
+    pub game_arguments: Vec<ResolvedLaunchArgument>,
+    pub jvm_arguments: Vec<ResolvedLaunchArgument>,
+    pub classpath_targets: Vec<String>,
+    pub native_jar_targets: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub legacy_game_arguments: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ResolvedLaunchArgument {
+    Plain {
+        value: String,
+    },
+    Conditional {
+        rules: Vec<ResolvedLaunchRule>,
+        values: Vec<String>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResolvedLaunchRule {
+    pub action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os_arch: Option<String>,
+    #[serde(default)]
+    pub has_os_version_constraint: bool,
+    #[serde(default)]
+    pub features: std::collections::BTreeMap<String, bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]

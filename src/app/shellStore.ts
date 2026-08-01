@@ -81,6 +81,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
     performance.mark("s9lab.navigation.start");
     set({ page, mobileNavigationOpen: false });
     requestAnimationFrame(() => {
+      document.getElementById("main-content")?.focus();
       performance.mark("s9lab.navigation.end");
       performance.measure("s9lab.navigation", "s9lab.navigation.start", "s9lab.navigation.end");
     });

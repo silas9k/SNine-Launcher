@@ -49,12 +49,12 @@ export const TextField = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLIn
   const descriptionId = description ? `${inputId}-description` : undefined;
   const errorId = error ? `${inputId}-error` : undefined;
   return (
-    <label className={`ui-field ${error ? "ui-field--error" : ""} ${className}`} htmlFor={inputId}>
-      <span className="ui-field__label">{label}</span>
+    <div className={`ui-field ${error ? "ui-field--error" : ""} ${className}`}>
+      <label className="ui-field__label" htmlFor={inputId}>{label}</label>
       {description ? <span className="ui-field__description" id={descriptionId}>{description}</span> : null}
       <input ref={ref} id={inputId} aria-describedby={[descriptionId, errorId].filter(Boolean).join(" ") || undefined} aria-invalid={Boolean(error)} {...props} />
       {error ? <span className="ui-field__error" id={errorId} role="alert">{error}</span> : null}
-    </label>
+    </div>
   );
 });
 TextField.displayName = "TextField";
@@ -71,15 +71,17 @@ export const SearchField = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes
 SearchField.displayName = "SearchField";
 
 export const SelectField = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { label: string; description?: string }>(
-  ({ label, description, id, children, ...props }, ref) => {
+  ({ label, description, id, children, "aria-describedby": ariaDescribedBy, ...props }, ref) => {
     const generated = useId();
     const selectId = id ?? generated;
+    const descriptionId = description ? `${selectId}-description` : undefined;
+    const describedBy = [ariaDescribedBy, descriptionId].filter(Boolean).join(" ") || undefined;
     return (
-      <label className="ui-field" htmlFor={selectId}>
-        <span className="ui-field__label">{label}</span>
-        {description ? <span className="ui-field__description">{description}</span> : null}
-        <span className="ui-select-wrap"><select ref={ref} id={selectId} {...props}>{children}</select><ChevronDown aria-hidden="true" /></span>
-      </label>
+      <div className="ui-field">
+        <label className="ui-field__label" htmlFor={selectId}>{label}</label>
+        {description ? <span className="ui-field__description" id={descriptionId}>{description}</span> : null}
+        <span className="ui-select-wrap"><select ref={ref} id={selectId} aria-describedby={describedBy} {...props}>{children}</select><ChevronDown aria-hidden="true" /></span>
+      </div>
     );
   },
 );
@@ -105,7 +107,8 @@ export function Switch({ label, description, ...props }: InputHTMLAttributes<HTM
   );
 }
 
-export function Tabs({ label, value, onChange, items }: { label: string; value: string; onChange: (value: string) => void; items: Array<{ value: string; label: string }> }) {
+export function Tabs({ label, value, onChange, items }: { label: string; value: string; onChange: (value: string) => void; items: Array<{ value: string; label: string; panelId?: string }> }) {
+  const groupId = useId();
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button[role='tab']")];
@@ -120,7 +123,7 @@ export function Tabs({ label, value, onChange, items }: { label: string; value: 
     tabs[next].focus();
     onChange(items[next].value);
   };
-  return <div className="ui-tabs" role="tablist" aria-label={label} onKeyDown={onKeyDown}>{items.map((item) => <button key={item.value} role="tab" aria-selected={value === item.value} tabIndex={value === item.value ? 0 : -1} onClick={() => onChange(item.value)}>{item.label}</button>)}</div>;
+  return <div className="ui-tabs" role="tablist" aria-label={label} aria-orientation="horizontal" onKeyDown={onKeyDown}>{items.map((item, index) => <button type="button" id={`${groupId}-tab-${index}`} key={item.value} role="tab" aria-controls={item.panelId} aria-selected={value === item.value} tabIndex={value === item.value ? 0 : -1} onClick={() => onChange(item.value)}>{item.label}</button>)}</div>;
 }
 
 export function Card({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
