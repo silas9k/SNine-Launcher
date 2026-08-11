@@ -23,3 +23,10 @@ test("delta applier requires clean bound input and rejects reparse traversal", (
   assert.match(source, /targetSha256/);
   assert.doesNotMatch(source, /Remove-Item\s+[^\r\n]*(?:\*|\$HOME|~)/i);
 });
+
+test("delivery generator sources delta bytes from the canonical target commit archive", () => {
+  const source = fs.readFileSync("CREATE-FINAL-DELIVERY.ps1", "utf8");
+  assert.match(source, /Expand-Archive -LiteralPath \$sourceZip/);
+  assert.match(source, /\$target = Join-Path \$targetProjectRoot/);
+  assert.doesNotMatch(source, /\$target = Join-Path \$PSScriptRoot/);
+});

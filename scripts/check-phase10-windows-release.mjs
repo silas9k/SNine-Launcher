@@ -12,7 +12,7 @@ const errors = [];
 for (const [label, source, markers] of [
   ["lifecycle", lifecycle, ["/CurrentUser", "/UPDATE", "/NS", "AllowUnsignedDiagnosticInstaller", "preexisting", "uninstall.exe"]],
   ["verifier", verifier, ["check-source-cleanliness.mjs", "check-phase10-windows-release.mjs", "npm", "ci", "test:browser", "test:performance", "1..3", "tauri:build", "ExerciseInstallerLifecycle", "NotSigned"]],
-  ["packager", packager, ["git status --short", "git archive", "site.s9lab.delta", "baseSha256", "targetSha256", "APPLY-S9LAB-DELTA.ps1"]],
+  ["packager", packager, ["git status --short", "git archive", "targetProjectRoot", "site.s9lab.delta", "baseSha256", "targetSha256", "APPLY-S9LAB-DELTA.ps1"]],
   ["applier", applier, ["Assert-NoReparseAncestor", "Get-FileHash", "baseCommit", "targetCommit", "Git-Ziel muss", "if ($mutated)", "Remove-Item -LiteralPath"]],
 ]) {
   for (const marker of markers) if (!source.includes(marker)) errors.push(`missing Phase 10 ${label} invariant: ${marker}`);

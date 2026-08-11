@@ -26,9 +26,10 @@ $sourceZip = Join-Path $outputFull $sourceName
 $deltaZip = Join-Path $outputFull $deltaName
 $workRoot = Join-Path ([IO.Path]::GetTempPath()) ("s9lab-delivery-" + [guid]::NewGuid().ToString("N"))
 $baseRoot = Join-Path $workRoot "base"
+$targetExtractRoot = Join-Path $workRoot "target"
 $deltaRoot = Join-Path $workRoot "delta"
 $payloadRoot = Join-Path $deltaRoot "files"
-New-Item -ItemType Directory -Path $baseRoot, $payloadRoot | Out-Null
+New-Item -ItemType Directory -Path $baseRoot, $targetExtractRoot, $payloadRoot | Out-Null
 
 function Assert-RelativeRepositoryPath {
     param([string]$Path)
@@ -40,6 +41,9 @@ function Assert-RelativeRepositoryPath {
 try {
     & git archive --format=zip "--prefix=$sourceRoot/" "--output=$sourceZip" $targetCommit
     if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $sourceZip -PathType Leaf)) { throw "Quellarchiv konnte nicht erzeugt werden." }
+    Expand-Archive -LiteralPath $sourceZip -DestinationPath $targetExtractRoot
+    $targetProjectRoot = Join-Path $targetExtractRoot $sourceRoot
+    if (!(Test-Path -LiteralPath $targetProjectRoot -PathType Container)) { throw "Zielcommit-Archiv besitzt nicht den erwarteten Stammordner." }
 
     $baseZip = Join-Path $workRoot "base.zip"
     & git archive --format=zip "--output=$baseZip" $BaseCommit
@@ -53,7 +57,7 @@ try {
 
     foreach ($path in ($changed | Sort-Object -Unique)) {
         Assert-RelativeRepositoryPath $path
-        $target = Join-Path $PSScriptRoot ($path -replace '/', [IO.Path]::DirectorySeparatorChar)
+        $target = Join-Path $targetProjectRoot ($path -replace '/', [IO.Path]::DirectorySeparatorChar)
         if (!(Test-Path -LiteralPath $target -PathType Leaf)) { throw "Zieldatei aus Git-Diff fehlt: $path" }
         $base = Join-Path $baseRoot ($path -replace '/', [IO.Path]::DirectorySeparatorChar)
         $payload = Join-Path $payloadRoot ($path -replace '/', [IO.Path]::DirectorySeparatorChar)
