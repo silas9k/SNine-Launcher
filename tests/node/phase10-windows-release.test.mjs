@@ -30,3 +30,8 @@ test("delivery generator sources delta bytes from the canonical target commit ar
   assert.match(source, /\$target = Join-Path \$targetProjectRoot/);
   assert.doesNotMatch(source, /\$target = Join-Path \$PSScriptRoot/);
 });
+
+test("historical Phase 1 workflow guard is LF and CRLF neutral for clean archives", () => {
+  const source = fs.readFileSync("scripts/check-phase1-foundation.mjs", "utf8");
+  assert.match(source, /read\(windowsWorkflowPath\)\.replace\(\/\\r\\n\?\/g, "\\n"\)/);
+});

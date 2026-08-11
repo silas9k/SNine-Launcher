@@ -175,7 +175,7 @@ const windowsWorkflowPath = ".github/workflows/phase1-windows-verification.yml";
 if (!fs.existsSync(windowsWorkflowPath)) {
   errors.push("Windows-CI-Workflow für Phase 1 fehlt.");
 } else {
-  const workflow = read(windowsWorkflowPath);
+  const workflow = read(windowsWorkflowPath).replace(/\r\n?/g, "\n");
   for (const required of [
     "permissions:\n  contents: read",
     "npm test",
