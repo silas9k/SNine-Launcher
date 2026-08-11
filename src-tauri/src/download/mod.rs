@@ -39,6 +39,7 @@ pub struct ResolvedDownload {
     target_relative_path: String,
     expected_size_bytes: u64,
     expected_sha1: Option<String>,
+    expected_sha512: Option<String>,
     expected_sha256: Option<String>,
 }
 
@@ -182,6 +183,7 @@ impl DownloadService {
             target_relative_path: target_relative_path.to_string(),
             expected_size_bytes,
             expected_sha1: None,
+            expected_sha512: None,
             expected_sha256: Some(expected_sha256.to_string()),
         })
     }
@@ -198,6 +200,21 @@ impl DownloadService {
         let mut resolved =
             self.resolve_common(provider, url, target_relative_path, expected_size_bytes)?;
         resolved.expected_sha1 = Some(expected_sha1.to_string());
+        Ok(resolved)
+    }
+
+    pub(crate) fn resolve_upstream_sha512(
+        &self,
+        provider: ProviderId,
+        url: &str,
+        target_relative_path: &str,
+        expected_size_bytes: u64,
+        expected_sha512: &str,
+    ) -> AppResult<ResolvedDownload> {
+        validate_sha512(expected_sha512)?;
+        let mut resolved =
+            self.resolve_common(provider, url, target_relative_path, expected_size_bytes)?;
+        resolved.expected_sha512 = Some(expected_sha512.to_string());
         Ok(resolved)
     }
 
@@ -231,6 +248,7 @@ impl DownloadService {
             target_relative_path: target_relative_path.to_string(),
             expected_size_bytes,
             expected_sha1: None,
+            expected_sha512: None,
             expected_sha256: None,
         })
     }
@@ -315,9 +333,11 @@ impl DownloadService {
             file: Some(file),
             expected_size: request.expected_size_bytes,
             expected_sha1: request.expected_sha1.clone(),
+            expected_sha512: request.expected_sha512.clone(),
             expected_sha256: request.expected_sha256.clone(),
             written: 0,
             sha1_hasher: sha1::Sha1::new(),
+            sha512_hasher: sha2::Sha512::new(),
             sha256_hasher: sha2::Sha256::new(),
             cancellation,
             committed: false,
@@ -338,6 +358,7 @@ impl DownloadService {
             target_relative_path: target.into(),
             expected_size_bytes: expected_size_override.unwrap_or(expected.len() as u64),
             expected_sha1: None,
+            expected_sha512: None,
             expected_sha256: Some(
                 hash_override.unwrap_or_else(|| crate::operations::model::sha256_hex(expected)),
             ),
@@ -351,9 +372,11 @@ struct DownloadSession {
     file: Option<std::fs::File>,
     expected_size: u64,
     expected_sha1: Option<String>,
+    expected_sha512: Option<String>,
     expected_sha256: Option<String>,
     written: u64,
     sha1_hasher: sha1::Sha1,
+    sha512_hasher: sha2::Sha512,
     sha256_hasher: sha2::Sha256,
     cancellation: CancellationToken,
     committed: bool,
@@ -376,6 +399,7 @@ impl DownloadSession {
             .ok_or_else(|| AppError::coded("download_session_closed"))?
             .write_all(bytes)?;
         self.sha1_hasher.update(bytes);
+        self.sha512_hasher.update(bytes);
         self.sha256_hasher.update(bytes);
         self.written = next;
         Ok(())
@@ -389,11 +413,16 @@ impl DownloadSession {
             return Err(AppError::coded("download_size_mismatch"));
         }
         let actual_sha1 = hex::encode(self.sha1_hasher.clone().finalize());
+        let actual_sha512 = hex::encode(self.sha512_hasher.clone().finalize());
         let actual_sha256 = hex::encode(self.sha256_hasher.clone().finalize());
         if self
             .expected_sha1
             .as_deref()
             .is_some_and(|expected| expected != actual_sha1)
+            || self
+                .expected_sha512
+                .as_deref()
+                .is_some_and(|expected| expected != actual_sha512)
             || self
                 .expected_sha256
                 .as_deref()
@@ -444,6 +473,17 @@ fn validate_sha1(value: &str) -> AppResult<()> {
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
     {
         return Err(AppError::coded("download_sha1_invalid"));
+    }
+    Ok(())
+}
+
+fn validate_sha512(value: &str) -> AppResult<()> {
+    if value.len() != 128
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(AppError::coded("download_sha512_invalid"));
     }
     Ok(())
 }

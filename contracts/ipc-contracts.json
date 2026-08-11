@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "types": {
     "Phase1CoreStatus": {
       "schemaVersion": "number",
@@ -201,6 +201,139 @@
     "Phase5ComponentChangeInput": {
       "profileId": "string",
       "selection": "Phase5ComponentSelection"
+    },
+    "Phase6Capability": {
+      "capabilityId": "string",
+      "state": "\"available\" | \"unconfigured\" | \"disabled\"",
+      "reasonCode": "string"
+    },
+    "Phase6Dependency": {
+      "projectId": "string",
+      "displayName": "string",
+      "relation": "\"required\" | \"optional\" | \"incompatible\"",
+      "satisfied": "boolean"
+    },
+    "Phase6Conflict": {
+      "contentId": "string",
+      "displayName": "string",
+      "reasonCode": "string"
+    },
+    "Phase6InstalledContentUpdate": {
+      "versionId": "string",
+      "versionNumber": "string"
+    },
+    "Phase6InstalledContent": {
+      "contentId": "string",
+      "projectId": "string | null",
+      "versionId": "string | null",
+      "displayName": "string",
+      "versionNumber": "string",
+      "contentType": "\"mod\" | \"modpack\" | \"shaderPack\" | \"resourcePack\"",
+      "source": "\"modrinth\" | \"local\"",
+      "enabled": "boolean",
+      "managedByPack": "boolean",
+      "sizeBytes": "number",
+      "sha256": "string",
+      "dependencies": "Phase6Dependency[]",
+      "conflicts": "Phase6Conflict[]",
+      "update": "Phase6InstalledContentUpdate | null"
+    },
+    "Phase6ContentSnapshot": {
+      "profileId": "string",
+      "minecraftVersion": "string | null",
+      "loader": "\"vanilla\" | \"fabric\" | \"neoforge\" | null",
+      "lockSha256": "string | null",
+      "content": "Phase6InstalledContent[]",
+      "localFileCapability": "Phase6Capability",
+      "profileFormatCapability": "Phase6Capability"
+    },
+    "Phase6SearchInput": {
+      "query": "string",
+      "contentType": "\"mod\" | \"modpack\" | \"shaderPack\" | \"resourcePack\"",
+      "minecraftVersion": "string",
+      "loader": "\"vanilla\" | \"fabric\" | \"neoforge\"",
+      "offset": "number",
+      "limit": "number"
+    },
+    "Phase6SearchHit": {
+      "projectId": "string",
+      "slug": "string",
+      "title": "string",
+      "description": "string",
+      "contentType": "\"mod\" | \"modpack\" | \"shaderPack\" | \"resourcePack\"",
+      "author": "string",
+      "downloads": "number",
+      "latestVersion": "string | null"
+    },
+    "Phase6SearchResult": {
+      "capability": "Phase6Capability",
+      "total": "number",
+      "offset": "number",
+      "hits": "Phase6SearchHit[]"
+    },
+    "Phase6ProjectVersion": {
+      "versionId": "string",
+      "versionNumber": "string",
+      "name": "string",
+      "publishedAtUnix": "number",
+      "compatible": "boolean",
+      "incompatibilityReason": "string | null",
+      "dependencies": "Phase6Dependency[]",
+      "conflicts": "Phase6Conflict[]"
+    },
+    "Phase6ProjectDetail": {
+      "projectId": "string",
+      "slug": "string",
+      "title": "string",
+      "description": "string",
+      "contentType": "\"mod\" | \"modpack\" | \"shaderPack\" | \"resourcePack\"",
+      "author": "string",
+      "license": "string",
+      "versions": "Phase6ProjectVersion[]"
+    },
+    "Phase6OperationResult": {
+      "operationId": "string",
+      "profileId": "string",
+      "revisionId": "string",
+      "changedContentIds": "string[]"
+    },
+    "Phase6ProfileTransferResult": {
+      "operationId": "string",
+      "profileId": "string",
+      "displayName": "string",
+      "fileName": "string | null"
+    },
+    "Phase6ProfileIdInput": {
+      "profileId": "string"
+    },
+    "Phase6ProjectIdInput": {
+      "projectId": "string"
+    },
+    "Phase6InstallInput": {
+      "profileId": "string",
+      "projectId": "string",
+      "versionId": "string | null"
+    },
+    "Phase6ContentToggleInput": {
+      "profileId": "string",
+      "contentId": "string",
+      "enabled": "boolean"
+    },
+    "Phase6ContentIdInput": {
+      "profileId": "string",
+      "contentId": "string"
+    },
+    "Phase6LocalFileInput": {
+      "profileId": "string",
+      "sourcePath": "string",
+      "contentType": "\"mod\" | \"modpack\" | \"shaderPack\" | \"resourcePack\""
+    },
+    "Phase6ProfileFileInput": {
+      "sourcePath": "string"
+    },
+    "Phase6ModrinthPackInput": {
+      "profileId": "string",
+      "sourcePath": "string"
     }
   },
   "commands": [
@@ -376,6 +509,78 @@
       "name": "phase5_set_s9lab_component",
       "inputType": "Phase5ComponentChangeInput",
       "outputType": "Phase5OperationResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_content_snapshot",
+      "inputType": "Phase6ProfileIdInput",
+      "outputType": "Phase6ContentSnapshot",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_check_content_updates",
+      "inputType": "Phase6ProfileIdInput",
+      "outputType": "Phase6ContentSnapshot",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_modrinth_search",
+      "inputType": "Phase6SearchInput",
+      "outputType": "Phase6SearchResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_modrinth_project",
+      "inputType": "Phase6ProjectIdInput",
+      "outputType": "Phase6ProjectDetail",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_install_modrinth",
+      "inputType": "Phase6InstallInput",
+      "outputType": "Phase6OperationResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_set_content_enabled",
+      "inputType": "Phase6ContentToggleInput",
+      "outputType": "Phase6OperationResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_remove_content",
+      "inputType": "Phase6ContentIdInput",
+      "outputType": "Phase6OperationResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_update_content",
+      "inputType": "Phase6ContentIdInput",
+      "outputType": "Phase6OperationResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_add_local_file",
+      "inputType": "Phase6LocalFileInput",
+      "outputType": "Phase6OperationResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_import_modrinth_pack",
+      "inputType": "Phase6ModrinthPackInput",
+      "outputType": "Phase6OperationResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_export_profile",
+      "inputType": "Phase6ProfileIdInput",
+      "outputType": "Phase6ProfileTransferResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase6_import_profile",
+      "inputType": "Phase6ProfileFileInput",
+      "outputType": "Phase6ProfileTransferResult",
       "errorType": "TypedIpcError"
     }
   ]

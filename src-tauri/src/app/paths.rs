@@ -20,6 +20,7 @@ pub struct LauncherPaths {
     pub staging_operations: PathBuf,
     pub migration: PathBuf,
     pub backups: PathBuf,
+    pub exports: PathBuf,
     pub runtimes: PathBuf,
     pub logs: PathBuf,
     pub launcher_logs: PathBuf,
@@ -66,6 +67,7 @@ impl LauncherPaths {
         let staging_operations = staging.join("operations");
         let migration = root.join("migration");
         let backups = root.join("backups");
+        let exports = root.join("exports");
         let runtimes = root.join("runtimes");
         let logs = root.join("logs");
         let launcher_logs = logs.join("launcher");
@@ -86,6 +88,7 @@ impl LauncherPaths {
             staging_operations,
             migration,
             backups,
+            exports,
             runtimes,
             logs,
             launcher_logs,
@@ -109,6 +112,7 @@ impl LauncherPaths {
             "staging-operations",
             "migration",
             "backups",
+            "exports",
             "runtimes",
             "launcher-logs",
         ] {
@@ -130,6 +134,7 @@ impl LauncherPaths {
             &self.staging_operations,
             &self.migration,
             &self.backups,
+            &self.exports,
             &self.runtimes,
             &self.logs,
             &self.launcher_logs,
@@ -210,6 +215,7 @@ mod phase1_tests {
             "staging/operations",
             "migration",
             "backups",
+            "exports",
             "runtimes",
             "logs/launcher",
         ] {

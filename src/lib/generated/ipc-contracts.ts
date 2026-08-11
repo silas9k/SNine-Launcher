@@ -1,5 +1,5 @@
 // Generated from contracts/ipc-contracts.json. Do not edit manually.
-export const IPC_CONTRACT_VERSION = 5 as const;
+export const IPC_CONTRACT_VERSION = 6 as const;
 
 export interface TypedIpcError {
   code: string;
@@ -247,6 +247,160 @@ export interface Phase5ComponentChangeInput {
   selection: Phase5ComponentSelection;
 }
 
+export interface Phase6Capability {
+  capabilityId: string;
+  state: "available" | "unconfigured" | "disabled";
+  reasonCode: string;
+}
+
+export interface Phase6Dependency {
+  projectId: string;
+  displayName: string;
+  relation: "required" | "optional" | "incompatible";
+  satisfied: boolean;
+}
+
+export interface Phase6Conflict {
+  contentId: string;
+  displayName: string;
+  reasonCode: string;
+}
+
+export interface Phase6InstalledContentUpdate {
+  versionId: string;
+  versionNumber: string;
+}
+
+export interface Phase6InstalledContent {
+  contentId: string;
+  projectId: string | null;
+  versionId: string | null;
+  displayName: string;
+  versionNumber: string;
+  contentType: "mod" | "modpack" | "shaderPack" | "resourcePack";
+  source: "modrinth" | "local";
+  enabled: boolean;
+  managedByPack: boolean;
+  sizeBytes: number;
+  sha256: string;
+  dependencies: Phase6Dependency[];
+  conflicts: Phase6Conflict[];
+  update: Phase6InstalledContentUpdate | null;
+}
+
+export interface Phase6ContentSnapshot {
+  profileId: string;
+  minecraftVersion: string | null;
+  loader: "vanilla" | "fabric" | "neoforge" | null;
+  lockSha256: string | null;
+  content: Phase6InstalledContent[];
+  localFileCapability: Phase6Capability;
+  profileFormatCapability: Phase6Capability;
+}
+
+export interface Phase6SearchInput {
+  query: string;
+  contentType: "mod" | "modpack" | "shaderPack" | "resourcePack";
+  minecraftVersion: string;
+  loader: "vanilla" | "fabric" | "neoforge";
+  offset: number;
+  limit: number;
+}
+
+export interface Phase6SearchHit {
+  projectId: string;
+  slug: string;
+  title: string;
+  description: string;
+  contentType: "mod" | "modpack" | "shaderPack" | "resourcePack";
+  author: string;
+  downloads: number;
+  latestVersion: string | null;
+}
+
+export interface Phase6SearchResult {
+  capability: Phase6Capability;
+  total: number;
+  offset: number;
+  hits: Phase6SearchHit[];
+}
+
+export interface Phase6ProjectVersion {
+  versionId: string;
+  versionNumber: string;
+  name: string;
+  publishedAtUnix: number;
+  compatible: boolean;
+  incompatibilityReason: string | null;
+  dependencies: Phase6Dependency[];
+  conflicts: Phase6Conflict[];
+}
+
+export interface Phase6ProjectDetail {
+  projectId: string;
+  slug: string;
+  title: string;
+  description: string;
+  contentType: "mod" | "modpack" | "shaderPack" | "resourcePack";
+  author: string;
+  license: string;
+  versions: Phase6ProjectVersion[];
+}
+
+export interface Phase6OperationResult {
+  operationId: string;
+  profileId: string;
+  revisionId: string;
+  changedContentIds: string[];
+}
+
+export interface Phase6ProfileTransferResult {
+  operationId: string;
+  profileId: string;
+  displayName: string;
+  fileName: string | null;
+}
+
+export interface Phase6ProfileIdInput {
+  profileId: string;
+}
+
+export interface Phase6ProjectIdInput {
+  projectId: string;
+}
+
+export interface Phase6InstallInput {
+  profileId: string;
+  projectId: string;
+  versionId: string | null;
+}
+
+export interface Phase6ContentToggleInput {
+  profileId: string;
+  contentId: string;
+  enabled: boolean;
+}
+
+export interface Phase6ContentIdInput {
+  profileId: string;
+  contentId: string;
+}
+
+export interface Phase6LocalFileInput {
+  profileId: string;
+  sourcePath: string;
+  contentType: "mod" | "modpack" | "shaderPack" | "resourcePack";
+}
+
+export interface Phase6ProfileFileInput {
+  sourcePath: string;
+}
+
+export interface Phase6ModrinthPackInput {
+  profileId: string;
+  sourcePath: string;
+}
+
 export const PHASE1_CORE_STATUS = "phase1_core_status" as const;
 
 export const PHASE2_SHELL_BOOTSTRAP = "phase2_shell_bootstrap" as const;
@@ -304,4 +458,28 @@ export const PHASE5_STOP_LAUNCH = "phase5_stop_launch" as const;
 export const PHASE5_LAUNCH_STATUSES = "phase5_launch_statuses" as const;
 
 export const PHASE5_SET_S9LAB_COMPONENT = "phase5_set_s9lab_component" as const;
+
+export const PHASE6_CONTENT_SNAPSHOT = "phase6_content_snapshot" as const;
+
+export const PHASE6_CHECK_CONTENT_UPDATES = "phase6_check_content_updates" as const;
+
+export const PHASE6_MODRINTH_SEARCH = "phase6_modrinth_search" as const;
+
+export const PHASE6_MODRINTH_PROJECT = "phase6_modrinth_project" as const;
+
+export const PHASE6_INSTALL_MODRINTH = "phase6_install_modrinth" as const;
+
+export const PHASE6_SET_CONTENT_ENABLED = "phase6_set_content_enabled" as const;
+
+export const PHASE6_REMOVE_CONTENT = "phase6_remove_content" as const;
+
+export const PHASE6_UPDATE_CONTENT = "phase6_update_content" as const;
+
+export const PHASE6_ADD_LOCAL_FILE = "phase6_add_local_file" as const;
+
+export const PHASE6_IMPORT_MODRINTH_PACK = "phase6_import_modrinth_pack" as const;
+
+export const PHASE6_EXPORT_PROFILE = "phase6_export_profile" as const;
+
+export const PHASE6_IMPORT_PROFILE = "phase6_import_profile" as const;
 

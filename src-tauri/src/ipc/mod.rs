@@ -4,13 +4,18 @@ use crate::{
         model::Account,
         service::{AuthService, AuthSnapshot, DeviceLoginPrompt},
     },
+    content::ContentKind,
+    content_service::{
+        Phase6ContentService, Phase6ContentSnapshot, Phase6OperationResult,
+        Phase6ProfileTransferResult, Phase6ProjectDetail, Phase6SearchResult,
+    },
     error::{AppError, AppResult},
     foundation::CoreStatus,
     profiles::{model::ProfileSummary, service::ProfileService},
 };
 use serde::Serialize;
 
-pub const IPC_CONTRACT_VERSION: u32 = 5;
+pub const IPC_CONTRACT_VERSION: u32 = 6;
 pub const PHASE1_CORE_STATUS_COMMAND: &str = "phase1_core_status";
 pub const PHASE2_SHELL_BOOTSTRAP_COMMAND: &str = "phase2_shell_bootstrap";
 pub const PHASE2_SAVE_SHELL_SETTINGS_COMMAND: &str = "phase2_save_shell_settings";
@@ -40,6 +45,18 @@ pub const PHASE5_LAUNCH_PROFILE_COMMAND: &str = "phase5_launch_profile";
 pub const PHASE5_STOP_LAUNCH_COMMAND: &str = "phase5_stop_launch";
 pub const PHASE5_LAUNCH_STATUSES_COMMAND: &str = "phase5_launch_statuses";
 pub const PHASE5_SET_S9LAB_COMPONENT_COMMAND: &str = "phase5_set_s9lab_component";
+pub const PHASE6_CONTENT_SNAPSHOT_COMMAND: &str = "phase6_content_snapshot";
+pub const PHASE6_CHECK_CONTENT_UPDATES_COMMAND: &str = "phase6_check_content_updates";
+pub const PHASE6_MODRINTH_SEARCH_COMMAND: &str = "phase6_modrinth_search";
+pub const PHASE6_MODRINTH_PROJECT_COMMAND: &str = "phase6_modrinth_project";
+pub const PHASE6_INSTALL_MODRINTH_COMMAND: &str = "phase6_install_modrinth";
+pub const PHASE6_SET_CONTENT_ENABLED_COMMAND: &str = "phase6_set_content_enabled";
+pub const PHASE6_REMOVE_CONTENT_COMMAND: &str = "phase6_remove_content";
+pub const PHASE6_UPDATE_CONTENT_COMMAND: &str = "phase6_update_content";
+pub const PHASE6_ADD_LOCAL_FILE_COMMAND: &str = "phase6_add_local_file";
+pub const PHASE6_IMPORT_MODRINTH_PACK_COMMAND: &str = "phase6_import_modrinth_pack";
+pub const PHASE6_EXPORT_PROFILE_COMMAND: &str = "phase6_export_profile";
+pub const PHASE6_IMPORT_PROFILE_COMMAND: &str = "phase6_import_profile";
 pub const TYPED_IPC_ERROR_FIELDS: &[&str] = &["code", "messageKey", "params"];
 
 #[derive(Debug, Clone, Serialize)]
@@ -416,6 +433,200 @@ pub async fn phase5_set_s9lab_component(
         .map_err(Into::into)
 }
 
+#[tauri::command]
+pub async fn phase6_content_snapshot(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    profile_id: String,
+) -> Result<Phase6ContentSnapshot, IpcError> {
+    authorize_main_window(&window)?;
+    let content = content.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || content.snapshot(&profile_id))
+        .await
+        .map_err(|_| IpcError::from(AppError::coded("content_worker_failed")))?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase6_check_content_updates(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    profile_id: String,
+) -> Result<Phase6ContentSnapshot, IpcError> {
+    authorize_main_window(&window)?;
+    let content = content.inner().clone();
+    let worker = content.clone();
+    let worker_profile_id = profile_id.clone();
+    let snapshot =
+        tauri::async_runtime::spawn_blocking(move || worker.snapshot(&worker_profile_id))
+            .await
+            .map_err(|_| IpcError::from(AppError::coded("content_worker_failed")))?
+            .map_err(IpcError::from)?;
+    content
+        .populate_snapshot_updates(&profile_id, snapshot)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+// Tauri exposes command inputs as individual, generated camelCase fields. Keeping
+// the six typed search filters flat preserves the shared IPC contract.
+#[allow(clippy::too_many_arguments)]
+pub async fn phase6_modrinth_search(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    query: String,
+    content_type: ContentKind,
+    minecraft_version: String,
+    loader: crate::runtime::LoaderKind,
+    offset: u32,
+    limit: u8,
+) -> Result<Phase6SearchResult, IpcError> {
+    authorize_main_window(&window)?;
+    content
+        .search(
+            query,
+            content_type,
+            minecraft_version,
+            loader,
+            offset,
+            limit,
+        )
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase6_modrinth_project(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    project_id: String,
+) -> Result<Phase6ProjectDetail, IpcError> {
+    authorize_main_window(&window)?;
+    content.project(&project_id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase6_install_modrinth(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    profile_id: String,
+    project_id: String,
+    version_id: Option<String>,
+) -> Result<Phase6OperationResult, IpcError> {
+    authorize_main_window(&window)?;
+    content
+        .install_modrinth(&profile_id, &project_id, version_id.as_deref())
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase6_set_content_enabled(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    profile_id: String,
+    content_id: String,
+    enabled: bool,
+) -> Result<Phase6OperationResult, IpcError> {
+    authorize_main_window(&window)?;
+    let content = content.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        content.set_enabled(&profile_id, &content_id, enabled)
+    })
+    .await
+    .map_err(|_| IpcError::from(AppError::coded("content_worker_failed")))?
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase6_remove_content(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    profile_id: String,
+    content_id: String,
+) -> Result<Phase6OperationResult, IpcError> {
+    authorize_main_window(&window)?;
+    let content = content.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || content.remove(&profile_id, &content_id))
+        .await
+        .map_err(|_| IpcError::from(AppError::coded("content_worker_failed")))?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase6_update_content(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    profile_id: String,
+    content_id: String,
+) -> Result<Phase6OperationResult, IpcError> {
+    authorize_main_window(&window)?;
+    content
+        .update(&profile_id, &content_id)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase6_add_local_file(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    profile_id: String,
+    source_path: String,
+    content_type: ContentKind,
+) -> Result<Phase6OperationResult, IpcError> {
+    authorize_main_window(&window)?;
+    let content = content.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        content.add_local_file(&profile_id, &source_path, content_type)
+    })
+    .await
+    .map_err(|_| IpcError::from(AppError::coded("content_worker_failed")))?
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase6_import_modrinth_pack(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    profile_id: String,
+    source_path: String,
+) -> Result<Phase6OperationResult, IpcError> {
+    authorize_main_window(&window)?;
+    content
+        .import_modrinth_pack(&profile_id, &source_path)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase6_export_profile(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    profile_id: String,
+) -> Result<Phase6ProfileTransferResult, IpcError> {
+    authorize_main_window(&window)?;
+    let content = content.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || content.export_profile(&profile_id))
+        .await
+        .map_err(|_| IpcError::from(AppError::coded("content_worker_failed")))?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase6_import_profile(
+    window: tauri::Window,
+    content: tauri::State<'_, Phase6ContentService>,
+    source_path: String,
+) -> Result<Phase6ProfileTransferResult, IpcError> {
+    authorize_main_window(&window)?;
+    content
+        .import_profile(&source_path)
+        .await
+        .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -471,6 +682,18 @@ mod tests {
             PHASE5_STOP_LAUNCH_COMMAND,
             PHASE5_LAUNCH_STATUSES_COMMAND,
             PHASE5_SET_S9LAB_COMPONENT_COMMAND,
+            PHASE6_CONTENT_SNAPSHOT_COMMAND,
+            PHASE6_CHECK_CONTENT_UPDATES_COMMAND,
+            PHASE6_MODRINTH_SEARCH_COMMAND,
+            PHASE6_MODRINTH_PROJECT_COMMAND,
+            PHASE6_INSTALL_MODRINTH_COMMAND,
+            PHASE6_SET_CONTENT_ENABLED_COMMAND,
+            PHASE6_REMOVE_CONTENT_COMMAND,
+            PHASE6_UPDATE_CONTENT_COMMAND,
+            PHASE6_ADD_LOCAL_FILE_COMMAND,
+            PHASE6_IMPORT_MODRINTH_PACK_COMMAND,
+            PHASE6_EXPORT_PROFILE_COMMAND,
+            PHASE6_IMPORT_PROFILE_COMMAND,
         ];
         for command_name in expected {
             let command = contract

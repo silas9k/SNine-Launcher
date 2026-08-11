@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::runtime::{ProfileRuntimeIntent, ResolvedRuntimeLockV1};
+use crate::{
+    content::{ContentSelection, ResolvedContentLockV1},
+    runtime::{ProfileRuntimeIntent, ResolvedRuntimeLockV1},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -38,6 +41,8 @@ pub struct ProfileManifestV2 {
     pub created_at_unix: i64,
     pub runtime: ProfileRuntimeIntent,
     pub s9lab_component: S9labComponentSelection,
+    #[serde(default)]
+    pub desired_content: Vec<ContentSelection>,
     pub mutable_directories: Vec<String>,
     pub isolation_policy: String,
 }
@@ -67,6 +72,8 @@ pub struct ProfileLockV2 {
     pub manifest_sha256: String,
     pub runtime: ResolvedRuntimeLockV1,
     pub launch: ResolvedLaunchConfiguration,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<ResolvedContentLockV1>,
     #[serde(default)]
     pub cache_blobs: Vec<LockedCacheBlob>,
 }

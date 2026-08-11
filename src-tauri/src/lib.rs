@@ -2,6 +2,9 @@ pub mod app;
 mod auth;
 pub mod cache;
 pub mod components;
+pub mod content;
+pub mod content_projection;
+pub mod content_service;
 mod discord_rpc;
 pub mod download;
 pub mod error;
@@ -9,8 +12,10 @@ pub mod foundation;
 pub mod ipc;
 mod logging;
 mod minecraft;
+pub mod modrinth;
 pub mod operations;
 pub mod platform;
+pub mod profile_format;
 pub mod profiles;
 pub mod runtime;
 pub mod security;
@@ -27,9 +32,11 @@ pub fn run() {
             let auth = auth::service::AuthService::system(core.storage().clone(), core.paths())?;
             let profiles = profiles::service::ProfileService::from_core(&core);
             let runtime = minecraft::service::MinecraftRuntimeService::from_core(&core)?;
+            let content = content_service::Phase6ContentService::from_core(&core)?;
             app.manage(auth);
             app.manage(profiles);
             app.manage(runtime);
+            app.manage(content);
             app.manage(core);
             let _ = app::config::load_settings()?;
             discord_rpc::start();
@@ -69,6 +76,18 @@ pub fn run() {
             ipc::phase5_stop_launch,
             ipc::phase5_launch_statuses,
             ipc::phase5_set_s9lab_component,
+            ipc::phase6_content_snapshot,
+            ipc::phase6_check_content_updates,
+            ipc::phase6_modrinth_search,
+            ipc::phase6_modrinth_project,
+            ipc::phase6_install_modrinth,
+            ipc::phase6_set_content_enabled,
+            ipc::phase6_remove_content,
+            ipc::phase6_update_content,
+            ipc::phase6_add_local_file,
+            ipc::phase6_import_modrinth_pack,
+            ipc::phase6_export_profile,
+            ipc::phase6_import_profile,
         ])
         .run(tauri::generate_context!())
         .expect("S9Lab Launcher konnte nicht gestartet werden");

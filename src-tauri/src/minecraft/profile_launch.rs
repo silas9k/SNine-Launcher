@@ -1332,6 +1332,7 @@ mod tests {
                     native_jar_targets: jars.iter().map(|(target, _)| target.clone()).collect(),
                     legacy_game_arguments: None,
                 },
+                content: None,
                 cache_blobs: Vec::new(),
             }
         }

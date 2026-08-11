@@ -100,6 +100,9 @@ pub enum OperationType {
     RuntimeInstall,
     RuntimeRepair,
     ComponentChange,
+    ContentInstall,
+    ContentChange,
+    ContentImport,
 }
 
 impl OperationType {
@@ -110,6 +113,9 @@ impl OperationType {
             Self::RuntimeInstall => "runtime-install",
             Self::RuntimeRepair => "runtime-repair",
             Self::ComponentChange => "component-change",
+            Self::ContentInstall => "content-install",
+            Self::ContentChange => "content-change",
+            Self::ContentImport => "content-import",
         }
     }
 
@@ -120,6 +126,9 @@ impl OperationType {
             "runtime-install" => Ok(Self::RuntimeInstall),
             "runtime-repair" => Ok(Self::RuntimeRepair),
             "component-change" => Ok(Self::ComponentChange),
+            "content-install" => Ok(Self::ContentInstall),
+            "content-change" => Ok(Self::ContentChange),
+            "content-import" => Ok(Self::ContentImport),
             _ => Err(AppError::coded_with(
                 "operation_type_unknown",
                 [("operationType", value.to_string())],
@@ -350,6 +359,9 @@ mod tests {
             OperationType::RuntimeInstall,
             OperationType::RuntimeRepair,
             OperationType::ComponentChange,
+            OperationType::ContentInstall,
+            OperationType::ContentChange,
+            OperationType::ContentImport,
         ] {
             assert_eq!(
                 OperationType::parse(operation_type.as_str()).expect("parse operation type"),

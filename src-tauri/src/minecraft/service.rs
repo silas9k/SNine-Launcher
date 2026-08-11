@@ -201,7 +201,7 @@ impl MinecraftRuntimeService {
             .await?
             .into_iter()
             .filter(|launch| launch.profile_id == profile_id)
-            .collect();
+            .collect::<Vec<_>>();
         let active_revision_id = profile
             .active_revision_id
             .clone()
@@ -305,6 +305,12 @@ impl MinecraftRuntimeService {
         if projection.install_state != "installed" || projection.revision_id != lock.revision_id {
             return Err(AppError::coded("runtime_repair_required"));
         }
+        crate::content_projection::project_content_for_launch(
+            &self.registry,
+            profile_id,
+            &lock.revision_id,
+            lock.content.as_ref(),
+        )?;
         let account_id = profile
             .account_id
             .as_deref()
@@ -350,6 +356,22 @@ impl MinecraftRuntimeService {
         runtime: ProfileRuntimeIntent,
         component: S9labComponentSelection,
     ) -> AppResult<PreparedRevision> {
+        let (desired_content, content) = if self.storage.runtime_projection(&profile.id)?.is_some()
+        {
+            let (current_manifest, current_lock) = self.read_active_v2(profile)?;
+            if current_lock.content.is_some() && current_manifest.runtime != runtime {
+                return Err(AppError::coded(
+                    "content_runtime_change_requires_resolution",
+                ));
+            }
+            if current_manifest.runtime == runtime {
+                (current_manifest.desired_content, current_lock.content)
+            } else {
+                (Vec::new(), None)
+            }
+        } else {
+            (Vec::new(), None)
+        };
         let base = self
             .resolver
             .resolve_mojang(&runtime.minecraft_version)
@@ -479,6 +501,8 @@ impl MinecraftRuntimeService {
                 runtime_lock,
                 launch,
                 operation_id,
+                desired_content,
+                content,
             },
         )
     }
@@ -559,6 +583,8 @@ impl MinecraftRuntimeService {
             runtime_lock,
             launch,
             operation_id,
+            desired_content,
+            content,
         } = preparation;
         let revision_id = new_identifier("rev");
         let manifest = ProfileManifestV2 {
@@ -568,6 +594,7 @@ impl MinecraftRuntimeService {
             created_at_unix: Utc::now().timestamp(),
             runtime,
             s9lab_component: component,
+            desired_content,
             mutable_directories: crate::profiles::service::MUTABLE_INSTANCE_DIRECTORIES
                 .iter()
                 .map(|value| (*value).to_string())
@@ -583,7 +610,25 @@ impl MinecraftRuntimeService {
                 sha256: item.sha256.clone(),
                 size_bytes: item.size_bytes,
             })
+            .chain(
+                content
+                    .iter()
+                    .flat_map(|content| content.items.iter())
+                    .map(|item| LockedCacheBlob {
+                        sha256: item.sha256.clone(),
+                        size_bytes: item.size_bytes,
+                    }),
+            )
             .collect::<Vec<_>>();
+        cache_blobs.extend(
+            content
+                .iter()
+                .flat_map(|content| content.overrides.iter())
+                .map(|override_file| LockedCacheBlob {
+                    sha256: override_file.sha256.clone(),
+                    size_bytes: override_file.size_bytes,
+                }),
+        );
         cache_blobs.sort();
         cache_blobs.dedup();
         let lock = ProfileLockV2 {
@@ -594,11 +639,12 @@ impl MinecraftRuntimeService {
             manifest_sha256: manifest_sha256.clone(),
             runtime: runtime_lock,
             launch,
+            content,
             cache_blobs,
         };
         let lock_json = canonical_json(&lock)?;
         let lock_sha256 = sha256_hex(lock_json.as_bytes());
-        let cache_materializations = lock
+        let mut cache_materializations: Vec<CacheMaterialization> = lock
             .runtime
             .items
             .iter()
@@ -607,7 +653,27 @@ impl MinecraftRuntimeService {
                 size_bytes: item.size_bytes,
                 relative_path: format!("runtime/{}", item.relative_target),
             })
+            .chain(
+                lock.content
+                    .iter()
+                    .flat_map(|content| content.items.iter())
+                    .map(|item| CacheMaterialization {
+                        blob_sha256: item.sha256.clone(),
+                        size_bytes: item.size_bytes,
+                        relative_path: format!("content/{}", item.relative_target),
+                    }),
+            )
             .collect();
+        cache_materializations.extend(
+            lock.content
+                .iter()
+                .flat_map(|content| content.overrides.iter())
+                .map(|override_file| CacheMaterialization {
+                    blob_sha256: override_file.sha256.clone(),
+                    size_bytes: override_file.size_bytes,
+                    relative_path: format!("content/{}", override_file.relative_target),
+                }),
+        );
         let runtime_projection = RuntimeQueryProjection {
             profile_id: profile.id.clone(),
             revision_id: revision_id.clone(),
@@ -667,6 +733,8 @@ impl MinecraftRuntimeService {
                 runtime_lock: lock.runtime,
                 launch: lock.launch,
                 operation_id: new_identifier("op"),
+                desired_content: manifest.desired_content,
+                content: lock.content,
             },
         )
     }
@@ -796,6 +864,8 @@ struct RevisionPreparation {
     runtime_lock: ResolvedRuntimeLockV1,
     launch: ResolvedLaunchConfiguration,
     operation_id: String,
+    desired_content: Vec<crate::content::ContentSelection>,
+    content: Option<crate::content::ResolvedContentLockV1>,
 }
 
 struct DownloadedSource {
@@ -1133,6 +1203,7 @@ mod tests {
                 java: JavaPolicy::Managed { major_version: 21 },
             },
             s9lab_component: S9labComponentSelection::Disabled,
+            desired_content: Vec::new(),
             mutable_directories: Vec::new(),
             isolation_policy: "verified-copy-no-hardlinks".into(),
         };

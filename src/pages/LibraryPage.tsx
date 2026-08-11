@@ -3,6 +3,7 @@ import { Archive, Copy, Database, FolderPlus, RotateCcw, Search, Star, Trash2 } 
 import { profileCommands } from "../lib/profileCommands";
 import { typedIpcError } from "../lib/shellCommands";
 import type { Phase4CacheGcReport, Phase4Profile } from "../lib/generated/ipc-contracts";
+import { ContentEditor } from "../components/content/ContentEditor";
 import {
   Badge,
   Button,
@@ -19,12 +20,14 @@ import { useI18n } from "../i18n/I18nProvider";
 import type { TranslationKey } from "../i18n/messages";
 
 type Lifecycle = Phase4Profile["lifecycleState"];
+type LibrarySection = "profiles" | "content";
 type EditorState = { mode: "create"; source: null; name: string } | { mode: "duplicate"; source: Phase4Profile; name: string };
 
 export function LibraryPage() {
   const { t, formatDate, formatNumber } = useI18n();
   const [profiles, setProfiles] = useState<Phase4Profile[]>([]);
   const [cacheReport, setCacheReport] = useState<Phase4CacheGcReport | null>(null);
+  const [section, setSection] = useState<LibrarySection>("profiles");
   const [lifecycle, setLifecycle] = useState<Lifecycle>("active");
   const [query, setQuery] = useState("");
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -112,13 +115,24 @@ export function LibraryPage() {
     <div className="page library-page">
       <header className="page-heading">
         <div><p className="page-eyebrow">{t("app.name")}</p><h1>{t("page.library.title")}</h1><p>{t("page.library.description")}</p></div>
-        <Button variant="primary" onClick={() => setEditor({ mode: "create", source: null, name: "" })}>
+        {section === "profiles" ? <Button variant="primary" onClick={() => setEditor({ mode: "create", source: null, name: "" })}>
           <FolderPlus aria-hidden="true" />{t("library.create")}
-        </Button>
+        </Button> : null}
       </header>
 
       {errorKey ? <Status tone="error" label={t("status.error")}>{t(errorKey)}</Status> : null}
-      <div className="library-toolbar">
+      <Tabs
+        label={t("library.sectionFilter")}
+        value={section}
+        onChange={(value) => setSection(value as LibrarySection)}
+        items={[
+          { value: "profiles", label: t("library.section.profiles"), panelId: "library-profiles-panel" },
+          { value: "content", label: t("library.section.content"), panelId: "library-content-panel" },
+        ]}
+      />
+
+      {section === "profiles" ? <div id="library-profiles-panel" role="tabpanel" className="library-profile-panel">
+        <div className="library-toolbar">
         <Tabs
           label={t("library.lifecycleFilter")}
           value={lifecycle}
@@ -135,7 +149,7 @@ export function LibraryPage() {
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
-      </div>
+        </div>
 
       <Card className="storage-overview">
         <header>
@@ -200,7 +214,7 @@ export function LibraryPage() {
         </div>
       )}
 
-      <Dialog
+        <Dialog
         open={Boolean(editor)}
         title={editor?.mode === "duplicate" ? t("library.duplicateTitle") : t("library.createTitle")}
         description={editor?.mode === "duplicate" ? t("library.duplicateDescription") : t("library.createDescription")}
@@ -210,7 +224,7 @@ export function LibraryPage() {
         {editor ? <TextField label={t("library.name")} value={editor.name} maxLength={64} autoFocus onChange={(event) => setEditor({ ...editor, name: event.currentTarget.value })} /> : null}
       </Dialog>
 
-      <ConfirmDialog
+        <ConfirmDialog
         open={Boolean(trashTarget)}
         title={t("library.trashTitle")}
         description={t("library.trashDescription", { name: trashTarget?.displayName ?? "" })}
@@ -220,7 +234,7 @@ export function LibraryPage() {
         onClose={closeTrashDialog}
         onConfirm={() => void moveToTrash()}
       />
-      <ConfirmDialog
+        <ConfirmDialog
         open={cacheDialogOpen}
         title={t("library.cacheCleanupTitle")}
         description={t("library.cacheCleanupDescription", { count: formatNumber(cacheReport?.eligibleForQuarantine ?? 0) })}
@@ -229,7 +243,12 @@ export function LibraryPage() {
         loading={busy === "cache"}
         onClose={closeCacheDialog}
         onConfirm={() => void quarantineCache()}
-      />
+        />
+      </div> : (
+        <div id="library-content-panel" role="tabpanel">
+          <ContentEditor profiles={profiles} onProfilesChanged={reload} />
+        </div>
+      )}
     </div>
   );
 }

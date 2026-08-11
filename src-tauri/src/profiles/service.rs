@@ -1,18 +1,30 @@
 use crate::{
     app::paths::LauncherPaths,
+    content::ContentKind,
+    content_projection::immutable_projected_targets_for_duplicate,
     error::{AppError, AppResult},
     foundation::CoreServices,
     operations::{
         engine::OperationEngine,
-        model::{canonical_json, new_identifier, sha256_hex, ProfileInstallPlan},
+        model::{
+            canonical_json, new_identifier, sha256_hex, CacheMaterialization, ProfileInstallPlan,
+        },
     },
-    profiles::model::{LockedCacheBlob, ProfileLockV1, ProfileManifestV1, ProfileSummary},
-    security::{fs as secure_fs, paths::validate_existing_chain, PathRegistry},
-    storage::{models::ProfileRecord, Storage},
+    profiles::model::{
+        LockedCacheBlob, ProfileLockV1, ProfileLockV2, ProfileManifestV1, ProfileManifestV2,
+        ProfileSummary,
+    },
+    security::{
+        fs as secure_fs,
+        paths::{collision_key, validate_existing_chain},
+        PathRegistry, SecurePath,
+    },
+    storage::{models::ProfileRecord, models::RuntimeQueryProjection, Storage},
 };
 use chrono::Utc;
 use serde::Deserialize;
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -30,6 +42,7 @@ pub const MUTABLE_INSTANCE_DIRECTORIES: &[&str] = &[
     "instance/logs",
     "instance/crash-reports",
 ];
+const MAX_DUPLICATE_PROFILE_DOCUMENT_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Clone)]
 pub struct ProfileService {
@@ -59,7 +72,7 @@ impl ProfileService {
 
     pub fn create_profile(&self, display_name: &str) -> AppResult<ProfileSummary> {
         let account_id = self.storage.selected_account_id()?;
-        self.create_profile_internal(display_name, None, account_id, Vec::new())
+        self.create_profile_internal(display_name, None, account_id, Vec::new(), None)
     }
 
     pub fn duplicate_profile(
@@ -74,12 +87,18 @@ impl ProfileService {
         if source.lifecycle_state == "trash" {
             return Err(AppError::coded("profile_duplicate_from_trash_forbidden"));
         }
-        let cache_blobs = self.read_active_cache_projection(&source)?;
+        let runtime_revision = self.read_duplicate_runtime_revision(&source)?;
+        let cache_blobs = runtime_revision
+            .as_ref()
+            .map(|revision| revision.lock.cache_blobs.clone())
+            .map(Ok)
+            .unwrap_or_else(|| self.read_active_cache_projection(&source))?;
         self.create_profile_internal(
             display_name,
             Some(source_profile_id),
             source.account_id.clone(),
             cache_blobs,
+            runtime_revision,
         )
     }
 
@@ -110,6 +129,7 @@ impl ProfileService {
         source_profile_id: Option<&str>,
         account_id: Option<String>,
         cache_blobs: Vec<LockedCacheBlob>,
+        runtime_revision: Option<DuplicateRuntimeRevision>,
     ) -> AppResult<ProfileSummary> {
         let display_name = validate_display_name(display_name)?;
         let profile_id = new_identifier("profile");
@@ -134,7 +154,12 @@ impl ProfileService {
             }
             self.create_mutable_layout(&profile_id)?;
             if let Some(source_profile_id) = source_profile_id {
-                self.copy_mutable_instance(source_profile_id, &profile_id)?;
+                let empty_excluded_targets = BTreeSet::new();
+                let excluded_targets = runtime_revision
+                    .as_ref()
+                    .map(|revision| &revision.excluded_instance_targets)
+                    .unwrap_or(&empty_excluded_targets);
+                self.copy_mutable_instance(source_profile_id, &profile_id, excluded_targets)?;
                 self.create_mutable_layout(&profile_id)?;
             }
             Ok(())
@@ -143,13 +168,17 @@ impl ProfileService {
             return Err(self.cleanup_unactivated_profile(&profile_id, error));
         }
 
-        let plan = match build_profile_plan(
-            &profile_id,
-            &display_name,
-            source_profile_id,
-            account_id.as_deref(),
-            cache_blobs,
-        ) {
+        let plan_result = match runtime_revision {
+            Some(revision) => build_cloned_runtime_plan(&profile_id, revision),
+            None => build_profile_plan(
+                &profile_id,
+                &display_name,
+                source_profile_id,
+                account_id.as_deref(),
+                cache_blobs,
+            ),
+        };
+        let plan = match plan_result {
             Ok(plan) => plan,
             Err(error) => return Err(self.cleanup_unactivated_profile(&profile_id, error)),
         };
@@ -213,6 +242,7 @@ impl ProfileService {
         &self,
         source_profile_id: &str,
         target_profile_id: &str,
+        excluded_targets: &BTreeSet<String>,
     ) -> AppResult<()> {
         let source = self
             .registry
@@ -220,15 +250,16 @@ impl ProfileService {
         let target = self
             .registry
             .resolve("profiles", format!("{target_profile_id}/instance"))?;
-        copy_directory_tree(
-            &self.registry,
-            source.anchor(),
-            source.absolute(),
-            target.absolute(),
-            Path::new(""),
+        let context = DirectoryCopyContext {
+            registry: &self.registry,
+            anchor: source.anchor(),
+            source_root: source.absolute(),
+            target_root: target.absolute(),
             source_profile_id,
             target_profile_id,
-        )
+            excluded_targets,
+        };
+        copy_directory_tree(&context, Path::new(""))
     }
 
     fn read_active_cache_projection(
@@ -246,6 +277,67 @@ impl ProfileService {
         validate_existing_chain(lock.anchor(), lock.absolute())?;
         let projection: CacheProjection = serde_json::from_slice(&fs::read(lock.absolute())?)?;
         Ok(projection.cache_blobs)
+    }
+
+    fn read_duplicate_runtime_revision(
+        &self,
+        source: &ProfileRecord,
+    ) -> AppResult<Option<DuplicateRuntimeRevision>> {
+        let Some(runtime_projection) = self.storage.runtime_projection(&source.id)? else {
+            return Ok(None);
+        };
+        let revision_id = source
+            .active_revision_id
+            .as_deref()
+            .ok_or_else(|| AppError::coded("profile_active_revision_missing"))?;
+        let manifest_path = self.registry.resolve(
+            "profiles",
+            format!("{}/revisions/{revision_id}/manifest.json", source.id),
+        )?;
+        let lock_path = self.registry.resolve(
+            "profiles",
+            format!("{}/revisions/{revision_id}/lock.json", source.id),
+        )?;
+        let manifest_bytes = read_profile_document(&manifest_path)?;
+        let lock_bytes = read_profile_document(&lock_path)?;
+        let manifest: ProfileManifestV2 = serde_json::from_slice(&manifest_bytes)
+            .map_err(|_| AppError::coded("profile_duplicate_manifest_invalid"))?;
+        let lock: ProfileLockV2 = serde_json::from_slice(&lock_bytes)
+            .map_err(|_| AppError::coded("profile_duplicate_lock_invalid"))?;
+        let manifest_sha256 = sha256_hex(canonical_json(&manifest)?.as_bytes());
+        if manifest.format != "site.s9lab.profile"
+            || manifest.format_version != 2
+            || manifest.profile_id != source.id
+            || lock.format != "site.s9lab.profile-lock"
+            || lock.format_version != 2
+            || lock.profile_id != source.id
+            || lock.revision_id != revision_id
+            || lock.manifest_sha256 != manifest_sha256
+            || runtime_projection.profile_id != source.id
+            || runtime_projection.revision_id != revision_id
+        {
+            return Err(AppError::coded("profile_duplicate_revision_invalid"));
+        }
+
+        let mut excluded_instance_targets =
+            immutable_projected_targets_for_duplicate(&self.registry, &source.id)?
+                .into_iter()
+                .map(|target| collision_key(Path::new(&target)))
+                .collect::<AppResult<BTreeSet<_>>>()?;
+        excluded_instance_targets.extend(
+            lock.content
+                .iter()
+                .flat_map(|content| content.items.iter())
+                .filter(|item| item.enabled && item.kind != ContentKind::Modpack)
+                .map(|item| collision_key(Path::new(&item.relative_target)))
+                .collect::<AppResult<BTreeSet<_>>>()?,
+        );
+        Ok(Some(DuplicateRuntimeRevision {
+            manifest,
+            lock,
+            runtime_projection,
+            excluded_instance_targets,
+        }))
     }
 
     pub fn root(&self) -> &Path {
@@ -308,27 +400,102 @@ fn build_profile_plan(
     })
 }
 
-fn copy_directory_tree(
-    registry: &PathRegistry,
-    anchor: &Path,
-    source_root: &Path,
-    target_root: &Path,
-    relative: &Path,
-    source_profile_id: &str,
-    target_profile_id: &str,
-) -> AppResult<()> {
-    let source_directory = source_root.join(relative);
-    validate_existing_chain(anchor, &source_directory)?;
+fn build_cloned_runtime_plan(
+    profile_id: &str,
+    revision: DuplicateRuntimeRevision,
+) -> AppResult<ProfileInstallPlan> {
+    let operation_id = new_identifier("op");
+    let revision_id = new_identifier("rev");
+    let mut manifest = revision.manifest;
+    manifest.profile_id = profile_id.to_string();
+    manifest.created_at_unix = Utc::now().timestamp();
+    let manifest_json = canonical_json(&manifest)?;
+    let manifest_sha256 = sha256_hex(manifest_json.as_bytes());
+
+    let mut lock = revision.lock;
+    lock.profile_id = profile_id.to_string();
+    lock.revision_id = revision_id.clone();
+    lock.manifest_sha256 = manifest_sha256.clone();
+    lock.cache_blobs.sort();
+    lock.cache_blobs.dedup();
+    let lock_json = canonical_json(&lock)?;
+    let lock_sha256 = sha256_hex(lock_json.as_bytes());
+
+    let mut cache_materializations = lock
+        .runtime
+        .items
+        .iter()
+        .map(|item| CacheMaterialization {
+            blob_sha256: item.sha256.clone(),
+            size_bytes: item.size_bytes,
+            relative_path: format!("runtime/{}", item.relative_target),
+        })
+        .chain(
+            lock.content
+                .iter()
+                .flat_map(|content| content.items.iter())
+                .map(|item| CacheMaterialization {
+                    blob_sha256: item.sha256.clone(),
+                    size_bytes: item.size_bytes,
+                    relative_path: format!("content/{}", item.relative_target),
+                }),
+        )
+        .collect::<Vec<_>>();
+    cache_materializations.extend(
+        lock.content
+            .iter()
+            .flat_map(|content| content.overrides.iter())
+            .map(|override_file| CacheMaterialization {
+                blob_sha256: override_file.sha256.clone(),
+                size_bytes: override_file.size_bytes,
+                relative_path: format!("content/{}", override_file.relative_target),
+            }),
+    );
+
+    let mut runtime_projection = revision.runtime_projection;
+    runtime_projection.profile_id = profile_id.to_string();
+    runtime_projection.revision_id = revision_id.clone();
+    runtime_projection.updated_at_unix = Utc::now().timestamp();
+    Ok(ProfileInstallPlan {
+        operation_id,
+        profile_id: profile_id.to_string(),
+        revision_id,
+        previous_revision_id: None,
+        manifest_json,
+        manifest_sha256,
+        lock_json,
+        lock_sha256,
+        payload_files: Vec::new(),
+        cache_materializations,
+        runtime_projection: Some(runtime_projection),
+        previous_runtime_projection: None,
+        cleanup_profile_on_rollback: true,
+    })
+}
+
+struct DirectoryCopyContext<'a> {
+    registry: &'a PathRegistry,
+    anchor: &'a Path,
+    source_root: &'a Path,
+    target_root: &'a Path,
+    source_profile_id: &'a str,
+    target_profile_id: &'a str,
+    excluded_targets: &'a BTreeSet<String>,
+}
+
+fn copy_directory_tree(context: &DirectoryCopyContext<'_>, relative: &Path) -> AppResult<()> {
+    let source_directory = context.source_root.join(relative);
+    validate_existing_chain(context.anchor, &source_directory)?;
     let metadata = fs::symlink_metadata(&source_directory)?;
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
         return Err(AppError::coded("profile_copy_source_tree_invalid"));
     }
-    let target_directory = target_root.join(relative);
-    let mut target_relative = PathBuf::from(target_profile_id).join("instance");
+    let target_directory = context.target_root.join(relative);
+    let mut target_relative = PathBuf::from(context.target_profile_id).join("instance");
     if !relative.as_os_str().is_empty() {
         target_relative.push(relative);
     }
-    let target = registry.resolve("profiles", target_relative)?;
+    let target = context.registry.resolve("profiles", target_relative)?;
     secure_fs::create_directories_within(target.anchor(), target.root(), &target_directory)?;
     for entry in fs::read_dir(source_directory)? {
         let entry = entry?;
@@ -337,26 +504,28 @@ fn copy_directory_tree(
         if metadata.file_type().is_symlink() {
             return Err(AppError::coded("profile_copy_symlink_forbidden"));
         }
+        if child_relative.starts_with(Path::new(".s9lab")) {
+            continue;
+        }
+        let child_key = collision_key(&child_relative)?;
+        if context.excluded_targets.contains(&child_key) {
+            if metadata.is_file() {
+                continue;
+            }
+            return Err(AppError::coded("profile_copy_managed_target_invalid"));
+        }
         if metadata.is_dir() {
-            copy_directory_tree(
-                registry,
-                anchor,
-                source_root,
-                target_root,
-                &child_relative,
-                source_profile_id,
-                target_profile_id,
-            )?;
+            copy_directory_tree(context, &child_relative)?;
         } else if metadata.is_file() {
-            let source = registry.resolve(
+            let source = context.registry.resolve(
                 "profiles",
-                PathBuf::from(source_profile_id)
+                PathBuf::from(context.source_profile_id)
                     .join("instance")
                     .join(&child_relative),
             )?;
-            let destination = registry.resolve(
+            let destination = context.registry.resolve(
                 "profiles",
-                PathBuf::from(target_profile_id)
+                PathBuf::from(context.target_profile_id)
                     .join("instance")
                     .join(&child_relative),
             )?;
@@ -403,6 +572,29 @@ fn profile_not_found(profile_id: &str) -> AppError {
 struct CacheProjection {
     #[serde(default)]
     cache_blobs: Vec<LockedCacheBlob>,
+}
+
+struct DuplicateRuntimeRevision {
+    manifest: ProfileManifestV2,
+    lock: ProfileLockV2,
+    runtime_projection: RuntimeQueryProjection,
+    excluded_instance_targets: BTreeSet<String>,
+}
+
+fn read_profile_document(path: &SecurePath) -> AppResult<Vec<u8>> {
+    validate_existing_chain(path.anchor(), path.absolute())?;
+    let metadata = fs::symlink_metadata(path.absolute())?;
+    if !metadata.is_file()
+        || metadata.len() == 0
+        || metadata.len() > MAX_DUPLICATE_PROFILE_DOCUMENT_BYTES
+    {
+        return Err(AppError::coded("profile_duplicate_document_invalid"));
+    }
+    let bytes = fs::read(path.absolute())?;
+    if bytes.len() as u64 != metadata.len() {
+        return Err(AppError::coded("profile_duplicate_document_changed"));
+    }
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -508,6 +700,169 @@ mod tests {
             .expect_err("ambiguous separator");
         assert_eq!(ambiguous.descriptor().code, "path_ambiguous_separator");
 
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn duplicate_copy_excludes_projection_state_and_immutable_managed_files() {
+        let root = crate::foundation::test_root("phase6-profile-duplicate-projection");
+        let core = CoreServices::open_fixed(&root).expect("core");
+        let profiles = ProfileService::from_core(&core);
+        let source = profiles.create_profile("Source").expect("source");
+        let target = profiles.create_profile("Target").expect("target");
+        let source_instance = root.join("profiles").join(&source.id).join("instance");
+        fs::create_dir_all(source_instance.join(".s9lab")).expect("internal state");
+        fs::write(
+            source_instance.join(".s9lab/content-projection.json"),
+            b"source-only marker",
+        )
+        .expect("marker");
+        fs::write(source_instance.join("mods/managed.jar"), b"managed").expect("managed file");
+        fs::write(source_instance.join("config/user.toml"), b"user override")
+            .expect("mutable override");
+        let excluded =
+            BTreeSet::from([collision_key(Path::new("mods/managed.jar")).expect("collision key")]);
+
+        profiles
+            .copy_mutable_instance(&source.id, &target.id, &excluded)
+            .expect("copy mutable state");
+
+        let target_instance = root.join("profiles").join(&target.id).join("instance");
+        assert!(!target_instance.join(".s9lab").exists());
+        assert!(!target_instance.join("mods/managed.jar").exists());
+        assert_eq!(
+            fs::read(target_instance.join("config/user.toml")).expect("copied override"),
+            b"user override"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn duplicate_of_runtime_profile_clones_v2_revision_with_new_identity() {
+        use crate::{
+            profiles::model::{ResolvedLaunchConfiguration, S9labComponentSelection},
+            runtime::{
+                JavaPolicy, LoaderKind, LoaderSelection, ProfileRuntimeIntent,
+                ResolvedRuntimeLockV1, RUNTIME_LOCK_FORMAT, RUNTIME_LOCK_FORMAT_VERSION,
+            },
+        };
+
+        let root = crate::foundation::test_root("phase6-profile-duplicate-v2");
+        let core = CoreServices::open_fixed(&root).expect("core");
+        let profiles = ProfileService::from_core(&core);
+        let source_id = new_identifier("profile");
+        let source_root = core
+            .registry()
+            .resolve("profiles", &source_id)
+            .expect("source root");
+        secure_fs::create_directories_within(
+            source_root.anchor(),
+            source_root.root(),
+            source_root.absolute(),
+        )
+        .expect("source directory");
+        core.storage()
+            .create_profile_with_metadata(&source_id, "Runtime source", None)
+            .expect("source projection");
+        profiles
+            .create_mutable_layout(&source_id)
+            .expect("source mutable layout");
+        let runtime = ProfileRuntimeIntent {
+            minecraft_version: "1.21.1".into(),
+            loader: LoaderSelection {
+                kind: LoaderKind::Vanilla,
+                loader_version: None,
+            },
+            java: JavaPolicy::Managed { major_version: 21 },
+        };
+        let revision = DuplicateRuntimeRevision {
+            manifest: ProfileManifestV2 {
+                format: "site.s9lab.profile".into(),
+                format_version: 2,
+                profile_id: "template".into(),
+                created_at_unix: 0,
+                runtime: runtime.clone(),
+                s9lab_component: S9labComponentSelection::Disabled,
+                desired_content: Vec::new(),
+                mutable_directories: MUTABLE_INSTANCE_DIRECTORIES
+                    .iter()
+                    .map(|value| (*value).to_string())
+                    .collect(),
+                isolation_policy: "verified-copy-no-hardlinks".into(),
+            },
+            lock: ProfileLockV2 {
+                format: "site.s9lab.profile-lock".into(),
+                format_version: 2,
+                profile_id: "template".into(),
+                revision_id: "template-revision".into(),
+                manifest_sha256: "0".repeat(64),
+                runtime: ResolvedRuntimeLockV1 {
+                    format: RUNTIME_LOCK_FORMAT.into(),
+                    format_version: RUNTIME_LOCK_FORMAT_VERSION,
+                    runtime,
+                    items: Vec::new(),
+                },
+                launch: ResolvedLaunchConfiguration {
+                    main_class: "net.minecraft.client.main.Main".into(),
+                    asset_index_id: "1.21.1".into(),
+                    java_major_version: 21,
+                    game_arguments: Vec::new(),
+                    jvm_arguments: Vec::new(),
+                    classpath_targets: Vec::new(),
+                    native_jar_targets: Vec::new(),
+                    legacy_game_arguments: None,
+                },
+                content: None,
+                cache_blobs: Vec::new(),
+            },
+            runtime_projection: RuntimeQueryProjection {
+                profile_id: "template".into(),
+                revision_id: "template-revision".into(),
+                minecraft_version: "1.21.1".into(),
+                loader_kind: "vanilla".into(),
+                loader_version: None,
+                component_id: None,
+                component_version: None,
+                install_state: "installed".into(),
+                updated_at_unix: 0,
+            },
+            excluded_instance_targets: BTreeSet::new(),
+        };
+        let source_plan = build_cloned_runtime_plan(&source_id, revision).expect("source plan");
+        core.operations()
+            .plan_profile_revision(&source_plan)
+            .expect("plan source");
+        core.operations()
+            .execute(&source_plan.operation_id)
+            .expect("activate source");
+
+        let duplicate = profiles
+            .duplicate_profile(&source_id, "Runtime duplicate")
+            .expect("duplicate runtime profile");
+        let projection = core
+            .storage()
+            .runtime_projection(&duplicate.id)
+            .expect("projection query")
+            .expect("runtime projection");
+        assert_eq!(projection.profile_id, duplicate.id);
+        assert_eq!(projection.revision_id, duplicate.active_revision_id);
+        let lock_path = core
+            .registry()
+            .resolve(
+                "profiles",
+                format!(
+                    "{}/revisions/{}/lock.json",
+                    duplicate.id, duplicate.active_revision_id
+                ),
+            )
+            .expect("duplicate lock");
+        let lock: ProfileLockV2 = serde_json::from_slice(
+            &read_profile_document(&lock_path).expect("duplicate lock document"),
+        )
+        .expect("duplicate v2 lock");
+        assert_eq!(lock.profile_id, duplicate.id);
+        assert_eq!(lock.revision_id, duplicate.active_revision_id);
+        assert_eq!(lock.format_version, 2);
         let _ = fs::remove_dir_all(root);
     }
 
