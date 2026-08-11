@@ -1,5 +1,5 @@
 // Generated from contracts/ipc-contracts.json. Do not edit manually.
-export const IPC_CONTRACT_VERSION = 7 as const;
+export const IPC_CONTRACT_VERSION = 8 as const;
 
 export interface TypedIpcError {
   code: string;
@@ -491,6 +491,28 @@ export interface Phase7RestoreBackupInput {
   includeFiles: boolean;
 }
 
+export interface Phase8LocalSyncRevision {
+  revisionId: string;
+  payloadSha256: string;
+  profileCount: number;
+  contentCount: number;
+  settingsIncluded: boolean;
+}
+
+export interface Phase8CloudSyncSnapshot {
+  providerState: "unconfigured" | "offline" | "available";
+  reasonCode: string;
+  microsoftBaseAccount: string | null;
+  linkedS9labAccount: string | null;
+  sessionState: "unavailable" | "signed-out" | "active" | "expired";
+  online: boolean;
+  deviceLimit: number;
+  enrolledDevices: number;
+  scopes: ("profile-metadata" | "content-lists" | "settings")[];
+  localRevision: Phase8LocalSyncRevision;
+  pendingConflicts: number;
+}
+
 export const PHASE1_CORE_STATUS = "phase1_core_status" as const;
 
 export const PHASE2_SHELL_BOOTSTRAP = "phase2_shell_bootstrap" as const;
@@ -588,4 +610,6 @@ export const PHASE7_ROLLBACK_PROFILE = "phase7_rollback_profile" as const;
 export const PHASE7_RESTORE_BACKUP = "phase7_restore_backup" as const;
 
 export const PHASE7_RUN_AUTOMATIC_UPDATES = "phase7_run_automatic_updates" as const;
+
+export const PHASE8_CLOUD_SYNC_SNAPSHOT = "phase8_cloud_sync_snapshot" as const;
 

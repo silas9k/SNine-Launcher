@@ -1,18 +1,17 @@
-import { Compass, Download, ScrollText, Sparkles, type LucideIcon } from "lucide-react";
+import { Compass, Download, ScrollText, type LucideIcon } from "lucide-react";
 import type { ShellPage } from "../app/shellStore";
 import { Card, EmptyState } from "../components/ui";
 import { useI18n } from "../i18n/I18nProvider";
 import type { TranslationKey } from "../i18n/messages";
 
 interface Copy { title: TranslationKey; description: TranslationKey; emptyTitle: TranslationKey; emptyDescription: TranslationKey; icon: LucideIcon }
-const copy: Record<Exclude<ShellPage, "home" | "settings" | "accounts" | "library" | "updates">, Copy> = {
+const copy: Record<Exclude<ShellPage, "home" | "settings" | "accounts" | "library" | "updates" | "cosmetics">, Copy> = {
   discover: { title: "page.discover.title", description: "page.discover.description", emptyTitle: "page.discover.emptyTitle", emptyDescription: "page.discover.emptyDescription", icon: Compass },
-  cosmetics: { title: "page.cosmetics.title", description: "page.cosmetics.description", emptyTitle: "page.cosmetics.emptyTitle", emptyDescription: "page.cosmetics.emptyDescription", icon: Sparkles },
   tasks: { title: "page.tasks.title", description: "page.tasks.description", emptyTitle: "tasks.emptyTitle", emptyDescription: "tasks.emptyDescription", icon: Download },
   diagnostics: { title: "page.diagnostics.title", description: "page.diagnostics.description", emptyTitle: "page.diagnostics.emptyTitle", emptyDescription: "page.diagnostics.emptyDescription", icon: ScrollText },
 };
 
-export function PlaceholderPage({ page }: { page: Exclude<ShellPage, "home" | "settings" | "accounts" | "library" | "updates"> }) {
+export function PlaceholderPage({ page }: { page: Exclude<ShellPage, "home" | "settings" | "accounts" | "library" | "updates" | "cosmetics"> }) {
   const { t } = useI18n();
   const item = copy[page];
   const Icon = item.icon;

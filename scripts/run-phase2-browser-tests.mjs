@@ -75,7 +75,7 @@ await withPreview(async (browser, baseUrl) => {
     const preview = await page.evaluate(() => {
       const stage = document.querySelector('[data-preview-surface="integrated"]');
       const viewport = document.querySelector(".player-stage__viewport");
-      const player = document.querySelector(".player-placeholder");
+      const player = document.querySelector(".player-render-anchor");
       const profiles = document.querySelector(".home-profiles");
       const status = document.querySelector(".home-status");
       if (!stage || !viewport || !player || !profiles || !status) return null;

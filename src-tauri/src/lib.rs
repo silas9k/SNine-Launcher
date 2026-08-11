@@ -1,6 +1,7 @@
 pub mod app;
 mod auth;
 pub mod cache;
+pub mod cloud_sync;
 pub mod components;
 pub mod content;
 pub mod content_projection;
@@ -35,11 +36,13 @@ pub fn run() {
             let runtime = minecraft::service::MinecraftRuntimeService::from_core(&core)?;
             let content = content_service::Phase6ContentService::from_core(&core)?;
             let updates = updates::service::UpdateService::from_core(&core)?;
+            let cloud_sync = cloud_sync::service::CloudSyncService::from_core(&core)?;
             app.manage(auth);
             app.manage(profiles);
             app.manage(runtime);
             app.manage(content);
             app.manage(updates);
+            app.manage(cloud_sync);
             app.manage(core);
             let _ = app::config::load_settings()?;
             discord_rpc::start();
@@ -99,6 +102,7 @@ pub fn run() {
             ipc::phase7_rollback_profile,
             ipc::phase7_restore_backup,
             ipc::phase7_run_automatic_updates,
+            ipc::phase8_cloud_sync_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("S9Lab Launcher konnte nicht gestartet werden");

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { Search } from "lucide-react";
 import { useI18n } from "../i18n/I18nProvider";
-import { Badge, Button, EmptyState, ErrorState, SearchField, Skeleton } from "../components/ui";
+import { Button, EmptyState, ErrorState, SearchField, Skeleton } from "../components/ui";
 import { RuntimePanel } from "../components/runtime/RuntimePanel";
 import { profileCommands } from "../lib/profileCommands";
 import type { Phase4Profile } from "../lib/generated/ipc-contracts";
 import { useWorkspaceStore } from "../app/workspaceStore";
+import { PlayerStage } from "../components/player/PlayerStage";
 
 type ProfileLoadState = "loading" | "ready" | "error";
 
@@ -106,16 +107,7 @@ export function HomePage() {
           <SearchField label={t("home.profileSearch")} placeholder={t("home.profileSearchPlaceholder")} value={query} disabled={loadState !== "ready" || profiles.length === 0} onChange={(event) => setQuery(event.currentTarget.value)} />
           {profileContent}
         </section>
-        <section className="home-panel player-stage" data-preview-surface="integrated">
-          <header><h2>{t("home.stageTitle")}</h2><Badge tone="info">{t("home.stageBadge")}</Badge></header>
-          <div className="player-stage__viewport" role="img" aria-label={t("home.stageUnavailable")}>
-            <div className="player-stage__halo" aria-hidden="true" />
-            <div className="player-placeholder" aria-hidden="true"><span className="player-placeholder__head" /><span className="player-placeholder__body" /><span className="player-placeholder__arm player-placeholder__arm--left" /><span className="player-placeholder__arm player-placeholder__arm--right" /><span className="player-placeholder__leg player-placeholder__leg--left" /><span className="player-placeholder__leg player-placeholder__leg--right" /></div>
-            <div className="player-stage__platform" aria-hidden="true" />
-            <span>{t("home.stageUnavailable")}</span>
-          </div>
-          <div className="player-stage__views"><Button disabled>{t("home.stageFront")}</Button><Button disabled>{t("home.stageBack")}</Button></div>
-        </section>
+        <PlayerStage />
         <RuntimePanel profile={selectedProfile} />
       </div>
     </div>

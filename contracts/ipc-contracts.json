@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "types": {
     "Phase1CoreStatus": {
       "schemaVersion": "number",
@@ -411,6 +411,26 @@
       "includeAccount": "boolean",
       "includeSettings": "boolean",
       "includeFiles": "boolean"
+    },
+    "Phase8LocalSyncRevision": {
+      "revisionId": "string",
+      "payloadSha256": "string",
+      "profileCount": "number",
+      "contentCount": "number",
+      "settingsIncluded": "boolean"
+    },
+    "Phase8CloudSyncSnapshot": {
+      "providerState": "\"unconfigured\" | \"offline\" | \"available\"",
+      "reasonCode": "string",
+      "microsoftBaseAccount": "string | null",
+      "linkedS9labAccount": "string | null",
+      "sessionState": "\"unavailable\" | \"signed-out\" | \"active\" | \"expired\"",
+      "online": "boolean",
+      "deviceLimit": "number",
+      "enrolledDevices": "number",
+      "scopes": "(\"profile-metadata\" | \"content-lists\" | \"settings\")[]",
+      "localRevision": "Phase8LocalSyncRevision",
+      "pendingConflicts": "number"
     }
   },
   "commands": [
@@ -706,6 +726,12 @@
       "name": "phase7_run_automatic_updates",
       "inputType": null,
       "outputType": "Phase7UpdateOperationResult[]",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase8_cloud_sync_snapshot",
+      "inputType": null,
+      "outputType": "Phase8CloudSyncSnapshot",
       "errorType": "TypedIpcError"
     }
   ]

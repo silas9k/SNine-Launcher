@@ -4,6 +4,7 @@ use crate::{
         model::Account,
         service::{AuthService, AuthSnapshot, DeviceLoginPrompt},
     },
+    cloud_sync::{model::CloudSyncSnapshot, service::CloudSyncService},
     content::ContentKind,
     content_service::{
         Phase6ContentService, Phase6ContentSnapshot, Phase6OperationResult,
@@ -22,7 +23,7 @@ use crate::{
 };
 use serde::Serialize;
 
-pub const IPC_CONTRACT_VERSION: u32 = 7;
+pub const IPC_CONTRACT_VERSION: u32 = 8;
 pub const PHASE1_CORE_STATUS_COMMAND: &str = "phase1_core_status";
 pub const PHASE2_SHELL_BOOTSTRAP_COMMAND: &str = "phase2_shell_bootstrap";
 pub const PHASE2_SAVE_SHELL_SETTINGS_COMMAND: &str = "phase2_save_shell_settings";
@@ -72,6 +73,7 @@ pub const PHASE7_APPLY_PROFILE_UPDATES_COMMAND: &str = "phase7_apply_profile_upd
 pub const PHASE7_ROLLBACK_PROFILE_COMMAND: &str = "phase7_rollback_profile";
 pub const PHASE7_RESTORE_BACKUP_COMMAND: &str = "phase7_restore_backup";
 pub const PHASE7_RUN_AUTOMATIC_UPDATES_COMMAND: &str = "phase7_run_automatic_updates";
+pub const PHASE8_CLOUD_SYNC_SNAPSHOT_COMMAND: &str = "phase8_cloud_sync_snapshot";
 pub const TYPED_IPC_ERROR_FIELDS: &[&str] = &["code", "messageKey", "params"];
 
 #[derive(Debug, Clone, Serialize)]
@@ -760,6 +762,19 @@ pub async fn phase7_run_automatic_updates(
         .map_err(Into::into)
 }
 
+#[tauri::command]
+pub async fn phase8_cloud_sync_snapshot(
+    window: tauri::Window,
+    cloud_sync: tauri::State<'_, CloudSyncService>,
+) -> Result<CloudSyncSnapshot, IpcError> {
+    authorize_main_window(&window)?;
+    let cloud_sync = cloud_sync.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || cloud_sync.snapshot())
+        .await
+        .map_err(|_| IpcError::from(AppError::coded("cloud_sync_worker_failed")))?
+        .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -835,6 +850,7 @@ mod tests {
             PHASE7_ROLLBACK_PROFILE_COMMAND,
             PHASE7_RESTORE_BACKUP_COMMAND,
             PHASE7_RUN_AUTOMATIC_UPDATES_COMMAND,
+            PHASE8_CLOUD_SYNC_SNAPSHOT_COMMAND,
         ];
         for command_name in expected {
             let command = contract

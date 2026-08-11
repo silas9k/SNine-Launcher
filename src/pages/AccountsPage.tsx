@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, ExternalLink, LogIn, RefreshCcw, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { Check, CloudOff, ExternalLink, Laptop2, Link2, LogIn, RefreshCcw, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { authCommands, openMicrosoftVerification } from "../lib/authCommands";
 import { typedIpcError } from "../lib/shellCommands";
 import type {
@@ -7,6 +7,8 @@ import type {
   Phase3AuthSnapshot,
   Phase3DeviceLoginPrompt,
 } from "../lib/generated/ipc-contracts";
+import type { Phase8CloudSyncSnapshot } from "../lib/generated/ipc-contracts";
+import { cloudSyncCommands } from "../lib/cloudSyncCommands";
 import { Badge, Button, Card, ConfirmDialog, Dialog, EmptyState, Status } from "../components/ui";
 import { useI18n } from "../i18n/I18nProvider";
 import type { TranslationKey } from "../i18n/messages";
@@ -14,13 +16,16 @@ import type { TranslationKey } from "../i18n/messages";
 export function AccountsPage() {
   const { t, locale, formatDate } = useI18n();
   const [snapshot, setSnapshot] = useState<Phase3AuthSnapshot | null>(null);
+  const [cloudSnapshot, setCloudSnapshot] = useState<Phase8CloudSyncSnapshot | null>(null);
   const [prompt, setPrompt] = useState<Phase3DeviceLoginPrompt | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Phase3Account | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
 
   const reload = useCallback(async () => {
-    setSnapshot(await authCommands.snapshot());
+    const [auth, cloud] = await Promise.all([authCommands.snapshot(), cloudSyncCommands.snapshot()]);
+    setSnapshot(auth);
+    setCloudSnapshot(cloud);
   }, []);
 
   useEffect(() => {
@@ -121,6 +126,27 @@ export function AccountsPage() {
         {t("accounts.offlineUnconfigured")}
       </Status>
       {errorKey ? <Status tone="error" label={t("status.error")}>{t(errorKey)}</Status> : null}
+
+      <Card className="cloud-sync-card">
+        <header className="cloud-sync-card__header">
+          <span className="cloud-sync-card__icon" aria-hidden="true"><CloudOff /></span>
+          <div><p className="page-eyebrow">{t("cloud.eyebrow")}</p><h2>{t("cloud.title")}</h2><p>{t("cloud.description")}</p></div>
+          <Badge tone="warning">{t("cloud.unavailable")}</Badge>
+        </header>
+        <div className="cloud-sync-card__grid">
+          <div><span><ShieldCheck aria-hidden="true" />{t("cloud.microsoftBase")}</span><strong>{cloudSnapshot?.microsoftBaseAccount ?? t("cloud.noBaseAccount")}</strong></div>
+          <div><span><Link2 aria-hidden="true" />{t("cloud.s9labLink")}</span><strong>{t("cloud.notLinked")}</strong></div>
+          <div><span><Laptop2 aria-hidden="true" />{t("cloud.devices")}</span><strong>{t("cloud.deviceCount", { count: cloudSnapshot?.enrolledDevices ?? 0, limit: cloudSnapshot?.deviceLimit ?? 2 })}</strong></div>
+        </div>
+        <div className="cloud-sync-card__revision">
+          <div><small>{t("cloud.localRevision")}</small><code>{cloudSnapshot?.localRevision.revisionId ?? "—"}</code></div>
+          <div><small>{t("cloud.localScopeSummary")}</small><strong>{t("cloud.localCounts", { profiles: cloudSnapshot?.localRevision.profileCount ?? 0, content: cloudSnapshot?.localRevision.contentCount ?? 0 })}</strong></div>
+        </div>
+        <div className="cloud-sync-card__footer">
+          <div><strong>{t("cloud.scopes")}</strong><span className="cloud-scope-list"><Badge tone="info">{t("cloud.scopeProfiles")}</Badge><Badge tone="info">{t("cloud.scopeContent")}</Badge><Badge tone="info">{t("cloud.scopeSettings")}</Badge></span><small>{t("cloud.privacy")}</small></div>
+          <Button disabled><Link2 aria-hidden="true" />{t("cloud.connect")}</Button>
+        </div>
+      </Card>
 
       {accounts.length === 0 ? (
         <Card>
