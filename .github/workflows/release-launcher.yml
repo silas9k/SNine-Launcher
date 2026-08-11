@@ -50,6 +50,23 @@ jobs:
       - name: Check TypeScript and build frontend
         run: npm run build
 
+      - name: Run responsive and accessibility browser checks
+        shell: pwsh
+        run: |
+          $env:S9LAB_BROWSER_PATH = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+          if (!(Test-Path $env:S9LAB_BROWSER_PATH)) { $env:S9LAB_BROWSER_PATH = "C:\Program Files\Microsoft\Edge\Application\msedge.exe" }
+          npm run test:browser
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run browser performance and memory checks
+        shell: pwsh
+        run: |
+          $env:S9LAB_BROWSER_PATH = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+          if (!(Test-Path $env:S9LAB_BROWSER_PATH)) { $env:S9LAB_BROWSER_PATH = "C:\Program Files\Microsoft\Edge\Application\msedge.exe" }
+          $env:S9LAB_PERFORMANCE_OUTPUT = "$env:RUNNER_TEMP\phase10-performance.json"
+          npm run test:performance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Check Rust formatting
         working-directory: src-tauri
         run: cargo fmt --all -- --check
@@ -71,6 +88,20 @@ jobs:
             cargo test --locked -- --nocapture
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+
+      - name: Build unsigned NSIS release candidate
+        run: npm run tauri:build
+
+      - name: Exercise isolated CurrentUser NSIS lifecycle
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "src-tauri\target\release\bundle\nsis\*.exe"
+          if (@($installer).Count -ne 1) { throw "Exactly one NSIS installer expected." }
+          $hash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash
+          .\TEST-NSIS-LIFECYCLE.ps1 -InstallerPath $installer.FullName -ExpectedSha256 $hash -AllowUnsignedDiagnosticInstaller
+
+      - name: Run final Phase 10 static release guard
+        run: node scripts/check-phase10-windows-release.mjs
 
       - name: Publication intentionally disabled
         shell: pwsh
