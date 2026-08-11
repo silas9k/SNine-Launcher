@@ -103,6 +103,8 @@ pub enum OperationType {
     ContentInstall,
     ContentChange,
     ContentImport,
+    ProfileRollback,
+    ProfileBackupRestore,
 }
 
 impl OperationType {
@@ -116,6 +118,8 @@ impl OperationType {
             Self::ContentInstall => "content-install",
             Self::ContentChange => "content-change",
             Self::ContentImport => "content-import",
+            Self::ProfileRollback => "profile-rollback",
+            Self::ProfileBackupRestore => "profile-backup-restore",
         }
     }
 
@@ -129,6 +133,8 @@ impl OperationType {
             "content-install" => Ok(Self::ContentInstall),
             "content-change" => Ok(Self::ContentChange),
             "content-import" => Ok(Self::ContentImport),
+            "profile-rollback" => Ok(Self::ProfileRollback),
+            "profile-backup-restore" => Ok(Self::ProfileBackupRestore),
             _ => Err(AppError::coded_with(
                 "operation_type_unknown",
                 [("operationType", value.to_string())],
@@ -362,6 +368,8 @@ mod tests {
             OperationType::ContentInstall,
             OperationType::ContentChange,
             OperationType::ContentImport,
+            OperationType::ProfileRollback,
+            OperationType::ProfileBackupRestore,
         ] {
             assert_eq!(
                 OperationType::parse(operation_type.as_str()).expect("parse operation type"),

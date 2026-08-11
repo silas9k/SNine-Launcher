@@ -20,6 +20,7 @@ pub mod profiles;
 pub mod runtime;
 pub mod security;
 pub mod storage;
+pub mod updates;
 mod window_commands;
 use tauri::Manager;
 
@@ -33,10 +34,12 @@ pub fn run() {
             let profiles = profiles::service::ProfileService::from_core(&core);
             let runtime = minecraft::service::MinecraftRuntimeService::from_core(&core)?;
             let content = content_service::Phase6ContentService::from_core(&core)?;
+            let updates = updates::service::UpdateService::from_core(&core)?;
             app.manage(auth);
             app.manage(profiles);
             app.manage(runtime);
             app.manage(content);
+            app.manage(updates);
             app.manage(core);
             let _ = app::config::load_settings()?;
             discord_rpc::start();
@@ -88,6 +91,14 @@ pub fn run() {
             ipc::phase6_import_modrinth_pack,
             ipc::phase6_export_profile,
             ipc::phase6_import_profile,
+            ipc::phase7_update_snapshot,
+            ipc::phase7_save_update_policy,
+            ipc::phase7_preview_profile_updates,
+            ipc::phase7_create_restore_point,
+            ipc::phase7_apply_profile_updates,
+            ipc::phase7_rollback_profile,
+            ipc::phase7_restore_backup,
+            ipc::phase7_run_automatic_updates,
         ])
         .run(tauri::generate_context!())
         .expect("S9Lab Launcher konnte nicht gestartet werden");

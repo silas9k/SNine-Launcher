@@ -14,6 +14,7 @@ import { AccountsPage } from "./pages/AccountsPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { UpdatesPage } from "./pages/UpdatesPage";
 
 function ShellContent() {
   const { t } = useI18n();
@@ -44,6 +45,8 @@ function ShellContent() {
         ? <AccountsPage />
         : page === "library"
           ? <LibraryPage />
+          : page === "updates"
+            ? <UpdatesPage />
           : <PlaceholderPage page={page} />;
   return (
     <AppErrorBoundary>

@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "types": {
     "Phase1CoreStatus": {
       "schemaVersion": "number",
@@ -334,6 +334,83 @@
     "Phase6ModrinthPackInput": {
       "profileId": "string",
       "sourcePath": "string"
+    },
+    "Phase7UpdatePolicy": {
+      "formatVersion": "1",
+      "launcher": "\"manual\" | \"automatic\"",
+      "profiles": "\"manual\" | \"automatic\"",
+      "s9labComponent": "\"manual\" | \"automatic\"",
+      "content": "\"manual\" | \"automatic\""
+    },
+    "Phase7UpdateChannel": {
+      "channel": "\"launcher\" | \"profiles\" | \"s9lab-component\" | \"content\"",
+      "mode": "\"manual\" | \"automatic\"",
+      "state": "\"available\" | \"unconfigured\" | \"disabled\"",
+      "reasonCode": "string | null"
+    },
+    "Phase7Revision": {
+      "revisionId": "string",
+      "createdAtUnix": "number",
+      "active": "boolean"
+    },
+    "Phase7UpdateProfile": {
+      "profileId": "string",
+      "displayName": "string",
+      "activeRevisionId": "string",
+      "revisions": "Phase7Revision[]"
+    },
+    "Phase7RestorePoint": {
+      "backupId": "string",
+      "profileId": "string",
+      "profileName": "string",
+      "sourceRevisionId": "string",
+      "createdAtUnix": "number",
+      "fileCount": "number",
+      "sizeBytes": "number"
+    },
+    "Phase7UpdateSnapshot": {
+      "policy": "Phase7UpdatePolicy",
+      "channels": "Phase7UpdateChannel[]",
+      "profiles": "Phase7UpdateProfile[]",
+      "restorePoints": "Phase7RestorePoint[]"
+    },
+    "Phase7UpdateChange": {
+      "channel": "\"content\"",
+      "itemId": "string",
+      "displayName": "string",
+      "currentVersion": "string",
+      "targetVersion": "string",
+      "verification": "string"
+    },
+    "Phase7UpdatePreview": {
+      "profileId": "string",
+      "baseRevisionId": "string",
+      "changes": "Phase7UpdateChange[]"
+    },
+    "Phase7UpdateOperationResult": {
+      "operationId": "string",
+      "profileId": "string",
+      "revisionId": "string",
+      "restorePointId": "string",
+      "appliedChanges": "string[]"
+    },
+    "Phase7SavePolicyInput": {
+      "policy": "Phase7UpdatePolicy"
+    },
+    "Phase7ApplyUpdatesInput": {
+      "profileId": "string",
+      "contentIds": "string[]"
+    },
+    "Phase7RollbackInput": {
+      "profileId": "string",
+      "revisionId": "string"
+    },
+    "Phase7RestoreBackupInput": {
+      "backupId": "string",
+      "displayName": "string",
+      "includeAccount": "boolean",
+      "includeSettings": "boolean",
+      "includeFiles": "boolean"
     }
   },
   "commands": [
@@ -581,6 +658,54 @@
       "name": "phase6_import_profile",
       "inputType": "Phase6ProfileFileInput",
       "outputType": "Phase6ProfileTransferResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase7_update_snapshot",
+      "inputType": null,
+      "outputType": "Phase7UpdateSnapshot",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase7_save_update_policy",
+      "inputType": "Phase7SavePolicyInput",
+      "outputType": "Phase7UpdateSnapshot",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase7_preview_profile_updates",
+      "inputType": "Phase6ProfileIdInput",
+      "outputType": "Phase7UpdatePreview",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase7_create_restore_point",
+      "inputType": "Phase6ProfileIdInput",
+      "outputType": "Phase7RestorePoint",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase7_apply_profile_updates",
+      "inputType": "Phase7ApplyUpdatesInput",
+      "outputType": "Phase7UpdateOperationResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase7_rollback_profile",
+      "inputType": "Phase7RollbackInput",
+      "outputType": "Phase7UpdateOperationResult",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase7_restore_backup",
+      "inputType": "Phase7RestoreBackupInput",
+      "outputType": "Phase4Profile",
+      "errorType": "TypedIpcError"
+    },
+    {
+      "name": "phase7_run_automatic_updates",
+      "inputType": null,
+      "outputType": "Phase7UpdateOperationResult[]",
       "errorType": "TypedIpcError"
     }
   ]

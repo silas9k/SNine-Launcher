@@ -973,6 +973,32 @@ impl Storage {
         .transpose()
     }
 
+    pub fn profile_revisions(&self, profile_id: &str) -> AppResult<Vec<RevisionRecord>> {
+        self.open()?
+            .query(
+                "SELECT id, profile_id, operation_id, manifest_sha256, lock_sha256,\
+                        manifest_relative_path, lock_relative_path, status, created_at_unix \
+                 FROM profile_revisions WHERE profile_id = ?1 AND status = 'committed' \
+                 ORDER BY created_at_unix DESC, id DESC",
+                &[Value::from(profile_id)],
+            )?
+            .into_iter()
+            .map(|row| {
+                Ok(RevisionRecord {
+                    id: row.text(0)?,
+                    profile_id: row.text(1)?,
+                    operation_id: row.text(2)?,
+                    manifest_sha256: row.text(3)?,
+                    lock_sha256: row.text(4)?,
+                    manifest_relative_path: row.text(5)?,
+                    lock_relative_path: row.text(6)?,
+                    status: row.text(7)?,
+                    created_at_unix: row.integer(8)?,
+                })
+            })
+            .collect()
+    }
+
     pub fn active_revision(&self, profile_id: &str) -> AppResult<Option<RevisionRecord>> {
         let profile = self
             .profile(profile_id)?

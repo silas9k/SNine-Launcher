@@ -12,10 +12,17 @@ use crate::{
     error::{AppError, AppResult},
     foundation::CoreStatus,
     profiles::{model::ProfileSummary, service::ProfileService},
+    updates::{
+        model::{
+            ProfileUpdatePreview, RestorePointSummary, UpdateCenterSnapshot, UpdateOperationResult,
+            UpdatePolicyV1,
+        },
+        service::UpdateService,
+    },
 };
 use serde::Serialize;
 
-pub const IPC_CONTRACT_VERSION: u32 = 6;
+pub const IPC_CONTRACT_VERSION: u32 = 7;
 pub const PHASE1_CORE_STATUS_COMMAND: &str = "phase1_core_status";
 pub const PHASE2_SHELL_BOOTSTRAP_COMMAND: &str = "phase2_shell_bootstrap";
 pub const PHASE2_SAVE_SHELL_SETTINGS_COMMAND: &str = "phase2_save_shell_settings";
@@ -57,6 +64,14 @@ pub const PHASE6_ADD_LOCAL_FILE_COMMAND: &str = "phase6_add_local_file";
 pub const PHASE6_IMPORT_MODRINTH_PACK_COMMAND: &str = "phase6_import_modrinth_pack";
 pub const PHASE6_EXPORT_PROFILE_COMMAND: &str = "phase6_export_profile";
 pub const PHASE6_IMPORT_PROFILE_COMMAND: &str = "phase6_import_profile";
+pub const PHASE7_UPDATE_SNAPSHOT_COMMAND: &str = "phase7_update_snapshot";
+pub const PHASE7_SAVE_UPDATE_POLICY_COMMAND: &str = "phase7_save_update_policy";
+pub const PHASE7_PREVIEW_PROFILE_UPDATES_COMMAND: &str = "phase7_preview_profile_updates";
+pub const PHASE7_CREATE_RESTORE_POINT_COMMAND: &str = "phase7_create_restore_point";
+pub const PHASE7_APPLY_PROFILE_UPDATES_COMMAND: &str = "phase7_apply_profile_updates";
+pub const PHASE7_ROLLBACK_PROFILE_COMMAND: &str = "phase7_rollback_profile";
+pub const PHASE7_RESTORE_BACKUP_COMMAND: &str = "phase7_restore_backup";
+pub const PHASE7_RUN_AUTOMATIC_UPDATES_COMMAND: &str = "phase7_run_automatic_updates";
 pub const TYPED_IPC_ERROR_FIELDS: &[&str] = &["code", "messageKey", "params"];
 
 #[derive(Debug, Clone, Serialize)]
@@ -627,6 +642,124 @@ pub async fn phase6_import_profile(
         .map_err(Into::into)
 }
 
+#[tauri::command]
+pub async fn phase7_update_snapshot(
+    window: tauri::Window,
+    updates: tauri::State<'_, UpdateService>,
+) -> Result<UpdateCenterSnapshot, IpcError> {
+    authorize_main_window(&window)?;
+    let updates = updates.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || updates.snapshot())
+        .await
+        .map_err(|_| IpcError::from(AppError::coded("update_worker_failed")))?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase7_save_update_policy(
+    window: tauri::Window,
+    updates: tauri::State<'_, UpdateService>,
+    policy: UpdatePolicyV1,
+) -> Result<UpdateCenterSnapshot, IpcError> {
+    authorize_main_window(&window)?;
+    let updates = updates.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || updates.save_policy(policy))
+        .await
+        .map_err(|_| IpcError::from(AppError::coded("update_worker_failed")))?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase7_preview_profile_updates(
+    window: tauri::Window,
+    updates: tauri::State<'_, UpdateService>,
+    profile_id: String,
+) -> Result<ProfileUpdatePreview, IpcError> {
+    authorize_main_window(&window)?;
+    updates.preview(&profile_id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase7_create_restore_point(
+    window: tauri::Window,
+    updates: tauri::State<'_, UpdateService>,
+    profile_id: String,
+) -> Result<RestorePointSummary, IpcError> {
+    authorize_main_window(&window)?;
+    let updates = updates.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || updates.create_restore_point(&profile_id))
+        .await
+        .map_err(|_| IpcError::from(AppError::coded("update_worker_failed")))?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase7_apply_profile_updates(
+    window: tauri::Window,
+    updates: tauri::State<'_, UpdateService>,
+    profile_id: String,
+    content_ids: Vec<String>,
+) -> Result<UpdateOperationResult, IpcError> {
+    authorize_main_window(&window)?;
+    updates
+        .apply_updates(&profile_id, &content_ids)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase7_rollback_profile(
+    window: tauri::Window,
+    updates: tauri::State<'_, UpdateService>,
+    profile_id: String,
+    revision_id: String,
+) -> Result<UpdateOperationResult, IpcError> {
+    authorize_main_window(&window)?;
+    let updates = updates.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || updates.rollback(&profile_id, &revision_id))
+        .await
+        .map_err(|_| IpcError::from(AppError::coded("update_worker_failed")))?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase7_restore_backup(
+    window: tauri::Window,
+    updates: tauri::State<'_, UpdateService>,
+    backup_id: String,
+    display_name: String,
+    include_account: bool,
+    include_settings: bool,
+    include_files: bool,
+) -> Result<ProfileSummary, IpcError> {
+    authorize_main_window(&window)?;
+    let updates = updates.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        updates.restore_backup(
+            &backup_id,
+            &display_name,
+            include_account,
+            include_settings,
+            include_files,
+        )
+    })
+    .await
+    .map_err(|_| IpcError::from(AppError::coded("update_worker_failed")))?
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn phase7_run_automatic_updates(
+    window: tauri::Window,
+    updates: tauri::State<'_, UpdateService>,
+) -> Result<Vec<UpdateOperationResult>, IpcError> {
+    authorize_main_window(&window)?;
+    updates
+        .run_configured_automatic_updates()
+        .await
+        .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -694,6 +827,14 @@ mod tests {
             PHASE6_IMPORT_MODRINTH_PACK_COMMAND,
             PHASE6_EXPORT_PROFILE_COMMAND,
             PHASE6_IMPORT_PROFILE_COMMAND,
+            PHASE7_UPDATE_SNAPSHOT_COMMAND,
+            PHASE7_SAVE_UPDATE_POLICY_COMMAND,
+            PHASE7_PREVIEW_PROFILE_UPDATES_COMMAND,
+            PHASE7_CREATE_RESTORE_POINT_COMMAND,
+            PHASE7_APPLY_PROFILE_UPDATES_COMMAND,
+            PHASE7_ROLLBACK_PROFILE_COMMAND,
+            PHASE7_RESTORE_BACKUP_COMMAND,
+            PHASE7_RUN_AUTOMATIC_UPDATES_COMMAND,
         ];
         for command_name in expected {
             let command = contract

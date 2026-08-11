@@ -1,5 +1,5 @@
 // Generated from contracts/ipc-contracts.json. Do not edit manually.
-export const IPC_CONTRACT_VERSION = 6 as const;
+export const IPC_CONTRACT_VERSION = 7 as const;
 
 export interface TypedIpcError {
   code: string;
@@ -401,6 +401,96 @@ export interface Phase6ModrinthPackInput {
   sourcePath: string;
 }
 
+export interface Phase7UpdatePolicy {
+  formatVersion: 1;
+  launcher: "manual" | "automatic";
+  profiles: "manual" | "automatic";
+  s9labComponent: "manual" | "automatic";
+  content: "manual" | "automatic";
+}
+
+export interface Phase7UpdateChannel {
+  channel: "launcher" | "profiles" | "s9lab-component" | "content";
+  mode: "manual" | "automatic";
+  state: "available" | "unconfigured" | "disabled";
+  reasonCode: string | null;
+}
+
+export interface Phase7Revision {
+  revisionId: string;
+  createdAtUnix: number;
+  active: boolean;
+}
+
+export interface Phase7UpdateProfile {
+  profileId: string;
+  displayName: string;
+  activeRevisionId: string;
+  revisions: Phase7Revision[];
+}
+
+export interface Phase7RestorePoint {
+  backupId: string;
+  profileId: string;
+  profileName: string;
+  sourceRevisionId: string;
+  createdAtUnix: number;
+  fileCount: number;
+  sizeBytes: number;
+}
+
+export interface Phase7UpdateSnapshot {
+  policy: Phase7UpdatePolicy;
+  channels: Phase7UpdateChannel[];
+  profiles: Phase7UpdateProfile[];
+  restorePoints: Phase7RestorePoint[];
+}
+
+export interface Phase7UpdateChange {
+  channel: "content";
+  itemId: string;
+  displayName: string;
+  currentVersion: string;
+  targetVersion: string;
+  verification: string;
+}
+
+export interface Phase7UpdatePreview {
+  profileId: string;
+  baseRevisionId: string;
+  changes: Phase7UpdateChange[];
+}
+
+export interface Phase7UpdateOperationResult {
+  operationId: string;
+  profileId: string;
+  revisionId: string;
+  restorePointId: string;
+  appliedChanges: string[];
+}
+
+export interface Phase7SavePolicyInput {
+  policy: Phase7UpdatePolicy;
+}
+
+export interface Phase7ApplyUpdatesInput {
+  profileId: string;
+  contentIds: string[];
+}
+
+export interface Phase7RollbackInput {
+  profileId: string;
+  revisionId: string;
+}
+
+export interface Phase7RestoreBackupInput {
+  backupId: string;
+  displayName: string;
+  includeAccount: boolean;
+  includeSettings: boolean;
+  includeFiles: boolean;
+}
+
 export const PHASE1_CORE_STATUS = "phase1_core_status" as const;
 
 export const PHASE2_SHELL_BOOTSTRAP = "phase2_shell_bootstrap" as const;
@@ -482,4 +572,20 @@ export const PHASE6_IMPORT_MODRINTH_PACK = "phase6_import_modrinth_pack" as cons
 export const PHASE6_EXPORT_PROFILE = "phase6_export_profile" as const;
 
 export const PHASE6_IMPORT_PROFILE = "phase6_import_profile" as const;
+
+export const PHASE7_UPDATE_SNAPSHOT = "phase7_update_snapshot" as const;
+
+export const PHASE7_SAVE_UPDATE_POLICY = "phase7_save_update_policy" as const;
+
+export const PHASE7_PREVIEW_PROFILE_UPDATES = "phase7_preview_profile_updates" as const;
+
+export const PHASE7_CREATE_RESTORE_POINT = "phase7_create_restore_point" as const;
+
+export const PHASE7_APPLY_PROFILE_UPDATES = "phase7_apply_profile_updates" as const;
+
+export const PHASE7_ROLLBACK_PROFILE = "phase7_rollback_profile" as const;
+
+export const PHASE7_RESTORE_BACKUP = "phase7_restore_backup" as const;
+
+export const PHASE7_RUN_AUTOMATIC_UPDATES = "phase7_run_automatic_updates" as const;
 
