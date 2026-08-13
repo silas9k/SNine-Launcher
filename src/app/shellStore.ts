@@ -4,7 +4,7 @@ import { applyShellTheme } from "../theme/applyTheme";
 import { DEFAULT_SHELL_SETTINGS, type ShellSettings } from "../theme/types";
 import type { TranslationKey } from "../i18n/messages";
 
-export type ShellPage = "home" | "library" | "discover" | "cosmetics" | "tasks" | "updates" | "accounts" | "settings" | "diagnostics";
+export type ShellPage = "home" | "library" | "discover" | "cosmetics" | "instances" | "tasks" | "updates" | "accounts" | "settings" | "diagnostics";
 export type ToastTone = "success" | "warning" | "error" | "info";
 
 export interface ToastMessage {

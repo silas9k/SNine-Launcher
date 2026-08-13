@@ -17,6 +17,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { UpdatesPage } from "./pages/UpdatesPage";
 import { CosmeticsPage } from "./pages/CosmeticsPage";
 import { DiscoverPage } from "./pages/DiscoverPage";
+import { InstancesPage } from "./pages/InstancesPage";
 
 function ShellContent() {
   const { t } = useI18n();
@@ -53,6 +54,8 @@ function ShellContent() {
             ? <DiscoverPage />
           : page === "cosmetics"
             ? <CosmeticsPage />
+          : page === "instances"
+            ? <InstancesPage />
           : <PlaceholderPage page={page} />;
   return (
     <AppErrorBoundary>

@@ -3,6 +3,7 @@ import {
   CircleUserRound,
   Compass,
   Download,
+  MonitorPlay,
   Home,
   Library,
   ListChecks,
@@ -26,6 +27,7 @@ const primary: Item[] = [
   { page: "library", key: "nav.library", icon: Library },
   { page: "discover", key: "nav.discover", icon: Compass },
   { page: "cosmetics", key: "nav.cosmetics", icon: Sparkles },
+  { page: "instances", key: "nav.instances", icon: MonitorPlay },
 ];
 const secondary: Item[] = [
   { page: "tasks", key: "nav.tasks", icon: Download },

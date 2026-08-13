@@ -5,12 +5,12 @@ import { useI18n } from "../i18n/I18nProvider";
 import type { TranslationKey } from "../i18n/messages";
 
 interface Copy { title: TranslationKey; description: TranslationKey; emptyTitle: TranslationKey; emptyDescription: TranslationKey; icon: LucideIcon }
-const copy: Record<Exclude<ShellPage, "home" | "settings" | "accounts" | "library" | "updates" | "cosmetics" | "discover">, Copy> = {
+const copy: Record<Exclude<ShellPage, "home" | "settings" | "accounts" | "library" | "updates" | "cosmetics" | "discover" | "instances">, Copy> = {
   tasks: { title: "page.tasks.title", description: "page.tasks.description", emptyTitle: "tasks.emptyTitle", emptyDescription: "tasks.emptyDescription", icon: Download },
   diagnostics: { title: "page.diagnostics.title", description: "page.diagnostics.description", emptyTitle: "page.diagnostics.emptyTitle", emptyDescription: "page.diagnostics.emptyDescription", icon: ScrollText },
 };
 
-export function PlaceholderPage({ page }: { page: Exclude<ShellPage, "home" | "settings" | "accounts" | "library" | "updates" | "cosmetics" | "discover"> }) {
+export function PlaceholderPage({ page }: { page: Exclude<ShellPage, "home" | "settings" | "accounts" | "library" | "updates" | "cosmetics" | "discover" | "instances"> }) {
   const { t } = useI18n();
   const item = copy[page];
   const Icon = item.icon;
