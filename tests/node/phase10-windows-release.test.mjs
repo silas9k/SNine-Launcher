@@ -35,3 +35,8 @@ test("historical Phase 1 workflow guard is LF and CRLF neutral for clean archive
   const source = fs.readFileSync("scripts/check-phase1-foundation.mjs", "utf8");
   assert.match(source, /read\(windowsWorkflowPath\)\.replace\(\/\\r\\n\?\/g, "\\n"\)/);
 });
+
+test("generated IPC check is LF and CRLF neutral for Windows git archives", () => {
+  const source = fs.readFileSync("scripts/generate-ipc-contracts.mjs", "utf8");
+  assert.match(source, /readFileSync\(target, "utf8"\)\.replace\(\/\\r\\n\?\/g, "\\n"\)/);
+});

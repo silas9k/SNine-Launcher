@@ -27,7 +27,9 @@ for (const command of contract.commands) {
 const output = `${lines.join("\n")}\n`;
 const target = "src/lib/generated/ipc-contracts.ts";
 if (process.argv.includes("--check")) {
-  const current = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
+  const current = fs.existsSync(target)
+    ? fs.readFileSync(target, "utf8").replace(/\r\n?/g, "\n")
+    : "";
   if (current !== output) {
     console.error(`${target} ist nicht aktuell. Führe npm run generate:ipc aus.`);
     process.exit(1);
