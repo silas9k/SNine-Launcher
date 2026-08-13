@@ -62,7 +62,7 @@ impl ControlledHttpClient {
             .timeout(Duration::from_secs(180))
             .connect_timeout(Duration::from_secs(20))
             .redirect(reqwest::redirect::Policy::none())
-            .user_agent(concat!("S9Lab-Launcher/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("SNine-Launcher/", env!("CARGO_PKG_VERSION")))
             .build()?;
         Ok(Self { client })
     }

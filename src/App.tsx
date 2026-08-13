@@ -16,6 +16,7 @@ import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { UpdatesPage } from "./pages/UpdatesPage";
 import { CosmeticsPage } from "./pages/CosmeticsPage";
+import { DiscoverPage } from "./pages/DiscoverPage";
 
 function ShellContent() {
   const { t } = useI18n();
@@ -48,6 +49,8 @@ function ShellContent() {
           ? <LibraryPage />
           : page === "updates"
             ? <UpdatesPage />
+          : page === "discover"
+            ? <DiscoverPage />
           : page === "cosmetics"
             ? <CosmeticsPage />
           : <PlaceholderPage page={page} />;

@@ -263,6 +263,9 @@
       "contentType": "\"mod\" | \"modpack\" | \"shaderPack\" | \"resourcePack\"",
       "author": "string",
       "downloads": "number",
+      "follows": "number",
+      "iconUrl": "string | null",
+      "updatedAtUnix": "number",
       "latestVersion": "string | null"
     },
     "Phase6SearchResult": {
@@ -289,6 +292,11 @@
       "contentType": "\"mod\" | \"modpack\" | \"shaderPack\" | \"resourcePack\"",
       "author": "string",
       "license": "string",
+      "iconUrl": "string | null",
+      "downloads": "number",
+      "followers": "number",
+      "updatedAtUnix": "number",
+      "categories": "string[]",
       "versions": "Phase6ProjectVersion[]"
     },
     "Phase6OperationResult": {
@@ -307,6 +315,7 @@
       "profileId": "string"
     },
     "Phase6ProjectIdInput": {
+      "profileId": "string",
       "projectId": "string"
     },
     "Phase6InstallInput": {

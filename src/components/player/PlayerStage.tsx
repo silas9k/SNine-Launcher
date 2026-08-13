@@ -17,17 +17,17 @@ function svgTexture(width: number, height: number, body: string): string {
 const LOCAL_SKIN = svgTexture(64, 64, `
   <rect width="64" height="64" fill="none"/>
   <path fill="#d9a47e" d="M0 0h32v16H0z"/><path fill="#151823" d="M8 0h16v8H8z"/>
-  <path fill="#202433" d="M16 16h24v16H16z"/><path fill="#a51f3d" d="M20 20h16v12H20z"/>
+  <path fill="#202433" d="M16 16h24v16H16z"/><path fill="#7650d9" d="M20 20h16v12H20z"/>
   <path fill="#d9a47e" d="M40 16h16v16H40zM32 48h16v16H32z"/>
   <path fill="#202433" d="M0 16h16v16H0zM16 48h16v16H16z"/>
   <path fill="#11131c" d="M8 8h8v2H8z"/><path fill="#dcecff" d="M9 9h2v2H9zM14 9h2v2h-2z"/>
-  <path fill="#c62847" fill-opacity=".72" d="M32 0h32v16H32zM16 32h48v16H16z"/>
+  <path fill="#9b7af5" fill-opacity=".72" d="M32 0h32v16H32zM16 32h48v16H16z"/>
 `);
 
 const LOCAL_CAPE = svgTexture(64, 32, `
   <rect width="64" height="32" fill="#151823"/><rect x="1" y="1" width="62" height="30" fill="#232838"/>
-  <path fill="#c62847" d="M24 5h16v4H24zM20 9h24v14H20zM24 23h16v4H24z"/>
-  <path fill="#f4c7d1" d="M28 10h8v12h-8z"/>
+  <path fill="#7650d9" d="M24 5h16v4H24zM20 9h24v14H20zM24 23h16v4H24z"/>
+  <path fill="#ddd2ff" d="M28 10h8v12h-8z"/>
 `);
 
 function animationFor(module: ViewerModule, name: AnimationName) {
@@ -44,7 +44,7 @@ export function PlayerStage() {
   const viewerRef = useRef<Viewer | null>(null);
   const moduleRef = useRef<ViewerModule | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "fallback">("loading");
-  const [playerName, setPlayerName] = useState("S9Lab");
+  const [playerName, setPlayerName] = useState("SNine");
   const [model, setModel] = useState<"classic" | "slim">("classic");
   const [outerLayer, setOuterLayer] = useState(true);
   const [equipment, setEquipment] = useState<Equipment>("cape");

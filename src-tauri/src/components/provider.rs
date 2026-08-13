@@ -316,7 +316,7 @@ impl S9labComponentProvider {
             .timeout(NETWORK_TIMEOUT)
             .connect_timeout(CONNECT_TIMEOUT)
             .redirect(reqwest::redirect::Policy::none())
-            .user_agent(concat!("S9Lab-Launcher/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("SNine-Launcher/", env!("CARGO_PKG_VERSION")))
             .build()?)
     }
 

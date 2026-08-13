@@ -110,9 +110,9 @@ export const contentCommands = {
           hits: [],
         }),
 
-  project: (projectId: string): Promise<Phase6ProjectDetail> =>
+  project: (profileId: string, projectId: string): Promise<Phase6ProjectDetail> =>
     isTauriRuntime()
-      ? invoke<Phase6ProjectDetail>(PHASE6_MODRINTH_PROJECT, { projectId })
+      ? invoke<Phase6ProjectDetail>(PHASE6_MODRINTH_PROJECT, { profileId, projectId })
       : Promise.reject(desktopOnly()),
 
   install: (

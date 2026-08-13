@@ -22,4 +22,4 @@ if (!window.requestAnimationFrame) window.requestAnimationFrame = (callback) => 
 if (!window.cancelAnimationFrame) window.cancelAnimationFrame = (id) => window.clearTimeout(id);
 
 document.documentElement.lang = "en";
-document.title = "S9Lab";
+document.title = "SNine Launcher";

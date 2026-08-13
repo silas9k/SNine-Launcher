@@ -37,13 +37,17 @@ if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::NotSig
     throw "Erwartet wurde ausschließlich der unsignierte Diagnoseinstaller; Status: $($signature.Status)."
 }
 
-$uninstallKey = "Software\Microsoft\Windows\CurrentVersion\Uninstall\S9Lab Launcher"
-$preexisting = @(@(
-    "Registry::HKEY_CURRENT_USER\$uninstallKey",
-    "Registry::HKEY_LOCAL_MACHINE\$uninstallKey"
-) | Where-Object { Test-Path -LiteralPath $_ })
+$uninstallKey = "Software\Microsoft\Windows\CurrentVersion\Uninstall\SNine Launcher"
+$guardedUninstallKeys = @(
+    $uninstallKey,
+    "Software\Microsoft\Windows\CurrentVersion\Uninstall\S9Lab Launcher"
+)
+$preexisting = @($guardedUninstallKeys | ForEach-Object {
+    "Registry::HKEY_CURRENT_USER\$_"
+    "Registry::HKEY_LOCAL_MACHINE\$_"
+} | Where-Object { Test-Path -LiteralPath $_ })
 if ($preexisting.Count -ne 0) {
-    throw "Der Lifecycle-Test stoppt, weil bereits eine S9Lab-Installation registriert ist: $($preexisting -join ', ')"
+    throw "Der Lifecycle-Test stoppt, weil bereits eine SNine- oder frühere S9Lab-Installation registriert ist: $($preexisting -join ', ')"
 }
 
 $sandbox = Join-Path ([IO.Path]::GetTempPath()) ("s9lab-nsis-" + [guid]::NewGuid().ToString("N"))

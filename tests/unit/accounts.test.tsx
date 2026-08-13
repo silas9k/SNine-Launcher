@@ -45,8 +45,8 @@ describe("phase 3 account authentication", () => {
     render(<I18nProvider localeSetting="en"><AccountsPage /></I18nProvider>);
     expect(await screen.findByText("Offline launches remain blocked until a maximum validity period is explicitly approved.")).toBeVisible();
     expect(await screen.findByText("No account connected")).toBeVisible();
-    expect(screen.getByRole("heading", { name: "S9Lab Cloud Sync" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Link S9Lab account" })).toBeDisabled();
+    expect(screen.getByRole("heading", { name: "SNine Cloud Sync" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Link SNine account" })).toBeDisabled();
     expect(mocks.snapshot).toHaveBeenCalledOnce();
   });
 

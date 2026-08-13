@@ -43,7 +43,7 @@ Tauri-Kaltstart noch den späteren Prozess-Working-Set-Nachweis.
 
 Diagnoseinstaller:
 
-- Pfad: `src-tauri/target/release/bundle/nsis/S9Lab Launcher_1.0.8_x64-setup.exe`
+- Pfad: `src-tauri/target/release/bundle/nsis/SNine Launcher_1.0.8_x64-setup.exe`
 - Größe: 6.099.440 Bytes
 - SHA-256: `2FE0273F5AEA5C124BE7F4E5E5CB05C67B97ABCE8CF5EFDF4C644BCEBD3458E3`
 - Authenticode-Status: `NotSigned`

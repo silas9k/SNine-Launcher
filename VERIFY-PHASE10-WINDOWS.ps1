@@ -131,7 +131,7 @@ try {
     $installers = @(Get-ChildItem -LiteralPath $nsisDirectory -Filter "*.exe" -File)
     if ($installers.Count -ne 1) { throw "Genau ein NSIS-Installer erwartet; gefunden: $($installers.Count)." }
     $installer = $installers[0]
-    if ($installer.Name -cne "S9Lab Launcher_1.0.8_x64-setup.exe") { throw "Unerwarteter Installername: $($installer.Name)" }
+    if ($installer.Name -cne "SNine Launcher_1.0.8_x64-setup.exe") { throw "Unerwarteter Installername: $($installer.Name)" }
     $installerSignature = Get-AuthenticodeSignature -LiteralPath $installer.FullName
     if ($installerSignature.Status -ne [System.Management.Automation.SignatureStatus]::NotSigned) { throw "Diagnoseinstaller sollte NotSigned sein; Status: $($installerSignature.Status)" }
     $installerHash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash

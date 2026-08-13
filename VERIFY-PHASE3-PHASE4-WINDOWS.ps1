@@ -210,7 +210,7 @@ $architecture = switch ($env:PROCESSOR_ARCHITECTURE) {
     "x86" { "x86" }
     default { throw "Nicht unterstützte Windows-Architektur: $env:PROCESSOR_ARCHITECTURE" }
 }
-$expectedInstallerName = "S9Lab Launcher_1.0.8_$architecture-setup.exe"
+$expectedInstallerName = "SNine Launcher_1.0.8_$architecture-setup.exe"
 if ($installers[0].Name -ne $expectedInstallerName) {
     throw "Unerwartetes NSIS-Bundle. Erwartet: $expectedInstallerName; gefunden: $($installers[0].Name)"
 }

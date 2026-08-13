@@ -67,13 +67,13 @@ export function resolveAccentPalette(input: string): AccentPalette {
   if (!isHexColor(input)) {
     return {
       input,
-      accent: "#c83f49",
+      accent: "#8b5cf6",
       onAccent: "#ffffff",
-      hover: "#d75a63",
-      pressed: "#a82f38",
-      focus: "#ef8f96",
-      lightContrast: contrastRatio("#c83f49", LIGHT_SURFACE),
-      darkContrast: contrastRatio("#c83f49", DARK_SURFACE),
+      hover: "#9d78f8",
+      pressed: "#7343df",
+      focus: "#b9a0ff",
+      lightContrast: contrastRatio("#8b5cf6", LIGHT_SURFACE),
+      darkContrast: contrastRatio("#8b5cf6", DARK_SURFACE),
       adjusted: false,
       valid: false,
     };

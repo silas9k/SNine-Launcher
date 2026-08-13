@@ -122,7 +122,7 @@ impl MicrosoftApi {
     pub fn new() -> AppResult<Self> {
         Ok(Self {
             client: Client::builder()
-                .user_agent(concat!("S9Lab-Launcher/", env!("CARGO_PKG_VERSION")))
+                .user_agent(concat!("SNine-Launcher/", env!("CARGO_PKG_VERSION")))
                 .connect_timeout(Duration::from_secs(15))
                 .timeout(Duration::from_secs(50))
                 .redirect(reqwest::redirect::Policy::none())

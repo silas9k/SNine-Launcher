@@ -63,6 +63,8 @@ type Workspace = "installed" | "discover";
 interface ContentEditorProps {
   profiles: Phase4Profile[];
   onProfilesChanged?: () => Promise<void>;
+  mode?: "full" | "discover";
+  initialKind?: Phase6ContentType;
 }
 
 const PAGE_SIZE = 20;
@@ -100,15 +102,20 @@ function currentVersion(detail: Phase6ProjectDetail | null, versionId: string): 
   return detail?.versions.find((version) => version.versionId === versionId) ?? null;
 }
 
-export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProps) {
+export function ContentEditor({
+  profiles,
+  onProfilesChanged,
+  mode = "full",
+  initialKind = "mod",
+}: ContentEditorProps) {
   const { t, formatDate, formatNumber } = useI18n();
   const activeProfiles = useMemo(
     () => profiles.filter((profile) => profile.lifecycleState === "active"),
     [profiles],
   );
   const [profileId, setProfileId] = useState("");
-  const [workspace, setWorkspace] = useState<Workspace>("installed");
-  const [kind, setKind] = useState<Phase6ContentType>("mod");
+  const [workspace, setWorkspace] = useState<Workspace>(mode === "discover" ? "discover" : "installed");
+  const [kind, setKind] = useState<Phase6ContentType>(initialKind);
   const [snapshotState, setSnapshotState] = useState<LoadState>("idle");
   const [snapshot, setSnapshot] = useState<Phase6ContentSnapshot | null>(null);
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
@@ -216,11 +223,7 @@ export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProp
   );
   const selectedVersion = currentVersion(detail, versionId);
   const hasBlockingConflict = Boolean(selectedVersion?.conflicts.length);
-  const hasMissingDependency = Boolean(
-    selectedVersion?.dependencies.some((dependency) =>
-      dependency.relation === "required" && !dependency.satisfied
-    ),
-  );
+  const selectedSearchHit = searchResult?.hits.find((hit) => hit.projectId === detail?.projectId) ?? null;
 
   const runMutation = async (
     key: string,
@@ -279,7 +282,7 @@ export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProp
     setDetailState("loading");
     setErrorMessage(null);
     try {
-      const next = await contentCommands.project(projectId);
+      const next = await contentCommands.project(profileId, projectId);
       if (request !== detailRequest.current) return;
       setDetail(next);
       setVersionId(next.versions.find((version) => version.compatible)?.versionId ?? "");
@@ -351,6 +354,28 @@ export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProp
     }
   };
 
+  const updateInstalledContent = async (item: Phase6InstalledContent) => {
+    if (item.update) {
+      await runMutation(
+        `update:${item.contentId}`,
+        () => contentCommands.update(profileId, item.contentId),
+        "content.operation.updated",
+      );
+      return;
+    }
+    setBusy(`update:${item.contentId}`);
+    setErrorMessage(null);
+    setLiveMessage("");
+    try {
+      setSnapshot(await contentCommands.checkUpdates(profileId));
+      setLiveMessage(t("content.operation.updatesChecked"));
+    } catch (error) {
+      setErrorMessage(localizeError(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   if (activeProfiles.length === 0) {
     return (
       <Card className="content-editor content-editor--empty">
@@ -379,14 +404,14 @@ export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProp
   }
 
   return (
-    <section className="content-editor" aria-labelledby="content-editor-title">
+    <section className={`content-editor ${mode === "discover" ? "content-editor--browser" : ""}`} aria-labelledby="content-editor-title">
       <Card className="content-editor__header">
         <div className="content-editor__title">
           <span className="content-editor__icon"><Blocks aria-hidden="true" /></span>
           <div>
-            <p className="page-eyebrow">{t("content.eyebrow")}</p>
-            <h2 id="content-editor-title">{t("content.title")}</h2>
-            <p>{t("content.description")}</p>
+            <p className="page-eyebrow">{mode === "discover" ? "MODRINTH" : t("content.eyebrow")}</p>
+            <h2 id="content-editor-title">{mode === "discover" ? t("page.discover.title") : t("content.title")}</h2>
+            <p>{mode === "discover" ? t("page.discover.description") : t("content.description")}</p>
           </div>
         </div>
         <div className="content-editor__profile-actions">
@@ -399,22 +424,22 @@ export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProp
               <option key={profile.id} value={profile.id}>{profile.displayName}</option>
             ))}
           </SelectField>
-          <input
+          {mode === "full" ? <input
             ref={profileImportInput}
             hidden
             type="file"
             accept=".s9profile,.zip"
             onChange={(event) => void useSelectedFile(event, importProfile)}
-          />
-          <Button
+          /> : null}
+          {mode === "full" ? <Button
             loading={busy === "profile-import"}
             onClick={() => profileImportInput.current?.click()}
-          ><Upload aria-hidden="true" />{t("content.importProfile")}</Button>
-          <Button
+          ><Upload aria-hidden="true" />{t("content.importProfile")}</Button> : null}
+          {mode === "full" ? <Button
             loading={busy === "profile-export"}
             disabled={!profileId || snapshot?.profileFormatCapability.state !== "available"}
             onClick={() => void exportProfile()}
-          ><Download aria-hidden="true" />{t("content.exportProfile")}</Button>
+          ><Download aria-hidden="true" />{t("content.exportProfile")}</Button> : null}
         </div>
         <div className="content-editor__context" aria-label={t("content.context") }>
           <span><Box aria-hidden="true" /><small>{t("content.minecraft")}</small><strong>{snapshot?.minecraftVersion ?? t("content.notConfigured")}</strong></span>
@@ -430,7 +455,7 @@ export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProp
       {liveMessage ? <Status tone="success" label={t("status.success")}>{liveMessage}</Status> : null}
 
       <div className="content-editor__toolbar">
-        <Tabs
+        {mode === "full" ? <Tabs
           label={t("content.workspace")}
           value={workspace}
           onChange={(value) => setWorkspace(value as Workspace)}
@@ -438,7 +463,8 @@ export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProp
             { value: "installed", label: t("content.workspace.installed"), panelId: "content-installed-panel" },
             { value: "discover", label: t("content.workspace.discover"), panelId: "content-discover-panel" },
           ]}
-        />
+        /> : null}
+        {mode === "discover" ? <span className="content-editor__category-label">{t("content.kindFilter")}</span> : null}
         <Tabs
           label={t("content.kindFilter")}
           value={kind}
@@ -605,11 +631,7 @@ export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProp
                       loading={busy === `update:${selectedContent.contentId}`}
                       disabled={selectedContent.source !== "modrinth" || selectedContent.managedByPack || busy !== null}
                       title={selectedContent.managedByPack ? t("content.managedByPackDescription") : undefined}
-                    onClick={() => void runMutation(
-                      `update:${selectedContent.contentId}`,
-                      () => contentCommands.update(profileId, selectedContent.contentId),
-                      "content.operation.updated",
-                    )}
+                    onClick={() => void updateInstalledContent(selectedContent)}
                     ><RefreshCw aria-hidden="true" />{selectedContent.update ? t("content.updateTo", { version: selectedContent.update.versionNumber }) : selectedContent.source === "modrinth" ? t("content.checkUpdate") : t("content.upToDate")}</Button>
                   <Button
                     variant="danger"
@@ -676,9 +698,12 @@ export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProp
                   {searchResult.hits.map((hit) => (
                     <li key={hit.projectId}>
                       <button type="button" aria-pressed={detail?.projectId === hit.projectId} onClick={() => void loadDetail(hit.projectId)}>
-                        <span className="content-search-results__icon"><Blocks aria-hidden="true" /></span>
+                        <span className="content-search-results__icon">
+                          <Blocks aria-hidden="true" />
+                          {hit.iconUrl ? <img src={hit.iconUrl} alt="" loading="lazy" /> : null}
+                        </span>
                         <span><strong>{hit.title}</strong><small>{hit.author} · {formatNumber(hit.downloads)} {t("content.downloads")}</small><p>{hit.description}</p></span>
-                        <Badge tone="neutral">{hit.latestVersion ?? t("content.versionUnknown")}</Badge>
+                        <Badge tone="neutral">{snapshot?.minecraftVersion ?? hit.latestVersion ?? t("content.versionUnknown")}</Badge>
                       </button>
                     </li>
                   ))}
@@ -700,10 +725,19 @@ export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProp
             {detailState === "ready" && detail ? (
               <>
                 <header className="content-project-panel__heading">
+                  <span className="content-project-panel__icon">
+                    <PackageCheck aria-hidden="true" />
+                    {detail.iconUrl ? <img src={detail.iconUrl} alt="" /> : null}
+                  </span>
                   <p className="page-eyebrow">{t(kindKey(detail.contentType))}</p>
                   <h3>{detail.title}</h3>
                   <p>{detail.description}</p>
-                  <div><Badge tone="neutral">{detail.author}</Badge><Badge tone="neutral">{detail.license}</Badge></div>
+                  <div>
+                    <Badge tone="neutral">{selectedSearchHit?.author ?? detail.author}</Badge>
+                    <Badge tone="neutral">{detail.license}</Badge>
+                    <Badge tone="neutral">{formatNumber(detail.downloads)} {t("content.downloads")}</Badge>
+                    {detail.categories.slice(0, 3).map((category) => <Badge key={category} tone="neutral">{category}</Badge>)}
+                  </div>
                 </header>
                 <SelectField label={t("content.version")} value={versionId} onChange={(event) => setVersionId(event.currentTarget.value)}>
                   <option value="">{t("content.noCompatibleVersion")}</option>
@@ -733,7 +767,7 @@ export function ContentEditor({ profiles, onProfilesChanged }: ContentEditorProp
                     </section>
                   </>
                 ) : null}
-                {(hasBlockingConflict || hasMissingDependency) ? <Status tone="warning" label={t("status.warning")}>{t("content.installNeedsResolution")}</Status> : null}
+                {hasBlockingConflict ? <Status tone="warning" label={t("status.warning")}>{t("content.installNeedsResolution")}</Status> : null}
                 <Button
                   variant="primary"
                   loading={busy === `install:${detail.projectId}`}

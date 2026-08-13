@@ -15,9 +15,9 @@ export interface ShellSettings {
 }
 
 export const DEFAULT_SHELL_SETTINGS: ShellSettings = {
-  appearance: "system",
+  appearance: "dark",
   locale: "system",
-  accentColor: "#c83f49",
+  accentColor: "#8b5cf6",
   density: "comfortable",
   navigationMode: "expanded",
   backgroundVariant: "calm",

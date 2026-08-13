@@ -17,7 +17,7 @@ import {
 import { useShellStore, type ShellPage } from "../../app/shellStore";
 import { useI18n } from "../../i18n/I18nProvider";
 import { IconButton } from "../ui";
-import logo from "../../assets/logo.png";
+import { BrandMark } from "../brand/BrandMark";
 import type { TranslationKey } from "../../i18n/messages";
 
 interface Item { page: ShellPage; key: TranslationKey; icon: LucideIcon }
@@ -132,8 +132,8 @@ export function Navigation() {
         inert={mobile ? !drawerOpen : undefined}
       >
         <div className="shell-nav__brand">
-          <img src={logo} alt="" aria-hidden="true" />
-          <strong>{t("app.name")}</strong>
+          <BrandMark aria-hidden="true" />
+          <span className="shell-nav__wordmark"><strong>{t("brand.name")}</strong><small>{t("brand.product")}</small></span>
           <IconButton className="shell-nav__mobile-close" label={t("app.close")} onClick={() => setMobileOpen(false)}><X aria-hidden="true" /></IconButton>
         </div>
         <NavGroup label={t("navigation.primary")} items={primary} />

@@ -30,9 +30,9 @@ impl ModrinthProvider {
             .connect_timeout(CONNECT_TIMEOUT)
             .redirect(reqwest::redirect::Policy::none())
             .user_agent(concat!(
-                "S9Lab/S9Lab-Launcher/",
+                "silas9k/SNine-Launcher/",
                 env!("CARGO_PKG_VERSION"),
-                " (Modrinth integration)"
+                " (https://github.com/silas9k/S9Lab-Launcher)"
             ))
             .build()?;
         Ok(Self { client })

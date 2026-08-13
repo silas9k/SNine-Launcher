@@ -129,7 +129,7 @@ impl ProfileProcessManager {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .kill_on_drop(false)
-            .env("MINECRAFT_LAUNCHER_BRAND", "S9LabLauncher")
+            .env("MINECRAFT_LAUNCHER_BRAND", "SNineLauncher")
             .env("MINECRAFT_LAUNCHER_VERSION", env!("CARGO_PKG_VERSION"));
         configure_windows_process_group(&mut command);
         let mut child = command
@@ -760,7 +760,7 @@ fn build_launch_arguments(
             "natives_directory",
             paths.natives.absolute().to_string_lossy().into_owned(),
         ),
-        ("launcher_name", "S9LabLauncher".into()),
+        ("launcher_name", "SNineLauncher".into()),
         ("launcher_version", env!("CARGO_PKG_VERSION").into()),
         ("classpath", classpath.clone()),
         ("classpath_separator", separator.into()),

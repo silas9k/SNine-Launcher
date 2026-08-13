@@ -33,7 +33,7 @@ pub enum AppError {
     Sqlite(String),
     #[error("Account wurde nicht gefunden: {0}")]
     AccountNotFound(String),
-    #[error("S9Lab Client ist noch nicht installiert")]
+    #[error("SNine Client ist noch nicht installiert")]
     ClientNotInstalled,
     #[error("Datei-Prüfsumme stimmt nicht: {path:?}")]
     HashMismatch { path: PathBuf },

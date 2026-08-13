@@ -1,5 +1,6 @@
 .ui-button, .ui-icon-button, .shell-nav__item, .ui-tabs button, .ui-menu-item { min-height: var(--control-height); border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
 .ui-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-width: 5.5rem; padding: 0 var(--space-4); font-weight: 700; }
+.ui-button > span { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-width: 0; white-space: nowrap; }
 .ui-button svg { width: 1.1rem; height: 1.1rem; }
 .ui-button--primary { color: var(--color-on-accent); background: var(--color-accent); border-color: color-mix(in srgb, var(--color-accent) 72%, var(--text-primary)); }
 .ui-button--primary:hover:not(:disabled) { background: var(--color-accent-hover); }

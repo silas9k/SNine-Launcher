@@ -1,6 +1,10 @@
-# S9Lab Launcher
+# SNine Launcher
 
-Desktop-Launcher für den S9Lab Minecraft Client auf Basis von **Tauri 2**, **Rust**, **React** und **TypeScript**.
+<img src="src/assets/snine-logo.png" alt="SNine Launcher Logo" width="96" height="96">
+
+Moderner Desktop-Launcher für Minecraft auf Basis von **Tauri 2**, **Rust**, **React** und **TypeScript**. Die sichtbare Produktmarke ist **SNine Launcher**; bestehende interne S9Lab-Formate und Datenpfade bleiben aus Kompatibilitätsgründen stabil.
+
+Projekt: [github.com/silas9k/S9Lab-Launcher](https://github.com/silas9k/S9Lab-Launcher)
 
 ## Aktueller Entwicklungsstand
 
@@ -9,7 +13,7 @@ Dieser Quellstand enthält den lokal maximal erreichbaren Entwicklungsstand der
 bleibt 1.0.8:
 
 - Phase-1-Plattform-, Speicher- und Operationskern bleibt erhalten.
-- Eine neue eigenständige S9Lab-App-Shell ersetzt die bisherigen parallelen Oberflächen.
+- Eine eigenständige, kompakte SNine-App-Shell bündelt Profile, Inhalte, Laufzeit, Updates, Accounts und Cosmetics.
 - Deutsch und Englisch werden über ein typisiertes Übersetzungssystem bereitgestellt.
 - System-, Hell-, Dunkel- und Hochkontrastmodus verwenden dieselben Design-Tokens.
 - Akzentfarbe, Dichte, Navigation, Hintergrund und reduzierte Animationen werden atomar über Rust gespeichert.

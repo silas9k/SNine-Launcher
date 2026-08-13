@@ -105,5 +105,5 @@ pub fn run() {
             ipc::phase8_cloud_sync_snapshot,
         ])
         .run(tauri::generate_context!())
-        .expect("S9Lab Launcher konnte nicht gestartet werden");
+        .expect("SNine Launcher konnte nicht gestartet werden");
 }

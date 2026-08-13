@@ -9,7 +9,7 @@ class Boundary extends Component<{ children: ReactNode; fallback: ReactNode }, S
   state: State = { failed: false };
   static getDerivedStateFromError(): State { return { failed: true }; }
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error("S9Lab UI boundary", error.name, info.componentStack);
+    console.error("SNine UI boundary", error.name, info.componentStack);
   }
   render(): ReactNode { return this.state.failed ? this.props.fallback : this.props.children; }
 }

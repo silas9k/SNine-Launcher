@@ -11,5 +11,5 @@ if (-not (Test-Path "node_modules")) {
     Write-Host "Installiere Node-Abhängigkeiten..." -ForegroundColor Cyan
     npm install
 }
-Write-Host "Starte S9Lab Launcher im Dev-Modus..." -ForegroundColor Red
+Write-Host "Starte SNine Launcher im Dev-Modus..." -ForegroundColor Magenta
 npm run tauri:dev

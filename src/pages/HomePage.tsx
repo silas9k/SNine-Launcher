@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
-import { Search } from "lucide-react";
+import { ArrowRight, LibraryBig, Play, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { useI18n } from "../i18n/I18nProvider";
 import { Button, EmptyState, ErrorState, SearchField, Skeleton } from "../components/ui";
 import { RuntimePanel } from "../components/runtime/RuntimePanel";
@@ -7,6 +7,8 @@ import { profileCommands } from "../lib/profileCommands";
 import type { Phase4Profile } from "../lib/generated/ipc-contracts";
 import { useWorkspaceStore } from "../app/workspaceStore";
 import { PlayerStage } from "../components/player/PlayerStage";
+import { useShellStore } from "../app/shellStore";
+import { BrandMark } from "../components/brand/BrandMark";
 
 type ProfileLoadState = "loading" | "ready" | "error";
 
@@ -18,6 +20,7 @@ export function HomePage() {
   const selectedProfileId = useWorkspaceStore((state) => state.selectedProfileId);
   const selectProfile = useWorkspaceStore((state) => state.selectProfile);
   const reconcileProfiles = useWorkspaceStore((state) => state.reconcileProfiles);
+  const setPage = useShellStore((state) => state.setPage);
 
   const loadProfiles = useCallback(async () => {
     setLoadState("loading");
@@ -100,7 +103,47 @@ export function HomePage() {
 
   return (
     <div className="page page--home">
-      <header className="page-heading page-heading--compact"><div><p className="page-eyebrow">{t("app.name")}</p><h1>{t("home.title")}</h1></div></header>
+      <section className="home-hero" aria-labelledby="home-title">
+        <div className="home-hero__copy">
+          <p className="page-eyebrow"><Sparkles aria-hidden="true" />{t("home.heroKicker")}</p>
+          <h1 id="home-title">{t("home.title")}</h1>
+          <p>{t("home.subtitle")}</p>
+          <div className="home-hero__actions">
+            <Button
+              variant="primary"
+              onClick={() => selectedProfile
+                ? document.getElementById("runtime-control")?.scrollIntoView({
+                    behavior: document.documentElement.dataset.reducedMotion === "true" ? "auto" : "smooth",
+                    block: "start",
+                  })
+                : setPage("library")}
+            >
+              <Play aria-hidden="true" />
+              {t(selectedProfile ? "home.heroAction" : "home.heroCreate")}
+            </Button>
+            <Button variant="ghost" onClick={() => setPage("library")}>
+              <LibraryBig aria-hidden="true" />
+              {t("home.heroLibrary")}
+            </Button>
+          </div>
+          <div className="home-hero__trust"><ShieldCheck aria-hidden="true" /><span>{t("home.heroSecurity")}</span></div>
+        </div>
+        <div className="home-hero__art" aria-hidden="true">
+          <span className="home-hero__orbit home-hero__orbit--one" />
+          <span className="home-hero__orbit home-hero__orbit--two" />
+          <BrandMark />
+          <strong>{t("brand.name")}</strong>
+          <small>{t("brand.tagline")}</small>
+        </div>
+        <div className="home-hero__profile">
+          <span>{t("home.profilePanel")}</span>
+          <strong>{selectedProfile?.displayName ?? t("home.heroNoProfile")}</strong>
+          <small>{selectedProfile
+            ? t("library.revision", { revision: selectedProfile.activeRevisionId.slice(-8) })
+            : t("home.noProfilesDescription")}</small>
+          <ArrowRight aria-hidden="true" />
+        </div>
+      </section>
       <div className="home-layout">
         <section className="home-panel home-profiles" aria-busy={loadState === "loading"}>
           <header><h2>{t("home.profilePanel")}</h2></header>

@@ -517,10 +517,14 @@ pub async fn phase6_modrinth_search(
 pub async fn phase6_modrinth_project(
     window: tauri::Window,
     content: tauri::State<'_, Phase6ContentService>,
+    profile_id: String,
     project_id: String,
 ) -> Result<Phase6ProjectDetail, IpcError> {
     authorize_main_window(&window)?;
-    content.project(&project_id).await.map_err(Into::into)
+    content
+        .project(&profile_id, &project_id)
+        .await
+        .map_err(Into::into)
 }
 
 #[tauri::command]

@@ -120,6 +120,9 @@ pub struct Phase6SearchHit {
     pub content_type: ContentKind,
     pub author: String,
     pub downloads: u64,
+    pub follows: u64,
+    pub icon_url: Option<String>,
+    pub updated_at_unix: i64,
     pub latest_version: Option<String>,
 }
 
@@ -155,6 +158,11 @@ pub struct Phase6ProjectDetail {
     pub content_type: ContentKind,
     pub author: String,
     pub license: String,
+    pub icon_url: Option<String>,
+    pub downloads: u64,
+    pub followers: u64,
+    pub updated_at_unix: i64,
+    pub categories: Vec<String>,
     pub versions: Vec<Phase6ProjectVersion>,
 }
 
@@ -354,24 +362,26 @@ impl Phase6ContentService {
                     content_type: content_kind(hit.project_type),
                     author: hit.author,
                     downloads: hit.downloads,
+                    follows: hit.follows,
+                    icon_url: hit.icon_url,
+                    updated_at_unix: hit.updated_at.timestamp(),
                     latest_version: None,
                 })
                 .collect(),
         })
     }
 
-    pub async fn project(&self, project_id: &str) -> AppResult<Phase6ProjectDetail> {
+    pub async fn project(
+        &self,
+        profile_id: &str,
+        project_id: &str,
+    ) -> AppResult<Phase6ProjectDetail> {
+        let profile = self.profile_for_read(profile_id)?;
+        let (manifest, _) = self.read_active_documents(&profile)?;
         let detail = self.modrinth.project_detail(project_id).await?;
+        let kind = content_kind(detail.project_type);
         let versions = self
-            .modrinth
-            .project_versions(
-                project_id,
-                &VersionQuery {
-                    loader: None,
-                    minecraft_version: None,
-                    featured: None,
-                },
-            )
+            .compatible_versions(project_id, kind, &manifest)
             .await?;
         Ok(project_detail_dto(detail, versions))
     }
@@ -2499,6 +2509,11 @@ fn project_detail_dto(detail: ProjectDetail, versions: Vec<ProjectVersion>) -> P
         content_type: content_kind(detail.project_type),
         author: "Modrinth".into(),
         license: detail.license.name,
+        icon_url: detail.icon_url,
+        downloads: detail.downloads,
+        followers: detail.followers,
+        updated_at_unix: detail.updated_at.timestamp(),
+        categories: detail.categories,
         versions: versions.into_iter().map(project_version_dto).collect(),
     }
 }

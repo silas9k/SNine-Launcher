@@ -162,7 +162,7 @@ describe("home workspace", () => {
   it("loads real profiles and their runtime before showing state, then supports listbox arrows", async () => {
     const user = userEvent.setup();
     render(<I18nProvider localeSetting="en"><HomePage /></I18nProvider>);
-    expect(screen.getByRole("status", { name: "Preparing S9Lab …" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Preparing SNine Launcher …" })).toBeInTheDocument();
 
     const first = await screen.findByRole("option", { name: /Fabric profile/ });
     const second = screen.getByRole("option", { name: /Vanilla profile/ });
@@ -271,7 +271,7 @@ describe("home workspace", () => {
     );
     await user.selectOptions(loader, "0.16.10");
 
-    const componentSwitch = screen.getByRole("switch", { name: /Use S9Lab component/ });
+    const componentSwitch = screen.getByRole("switch", { name: /Use SNine component/ });
     await waitFor(() => expect(componentSwitch).toBeEnabled());
     await user.click(componentSwitch);
     expect(screen.queryByRole("textbox", { name: "Component ID" })).not.toBeInTheDocument();
@@ -400,7 +400,7 @@ describe("home workspace", () => {
 
     await screen.findByText("Not configured");
     expect(screen.getByRole("option", { name: "NeoForge" })).toBeDisabled();
-    expect(screen.getByRole("switch", { name: /Use S9Lab component/ })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: /Use SNine component/ })).toBeDisabled();
     expect(screen.getByText(/No trusted component provider is configured/)).toBeVisible();
     expect(screen.getByText(/NeoForge remains disabled/)).toBeVisible();
     expect(mocks.componentCatalog).not.toHaveBeenCalled();

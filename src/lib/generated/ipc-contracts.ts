@@ -315,6 +315,9 @@ export interface Phase6SearchHit {
   contentType: "mod" | "modpack" | "shaderPack" | "resourcePack";
   author: string;
   downloads: number;
+  follows: number;
+  iconUrl: string | null;
+  updatedAtUnix: number;
   latestVersion: string | null;
 }
 
@@ -344,6 +347,11 @@ export interface Phase6ProjectDetail {
   contentType: "mod" | "modpack" | "shaderPack" | "resourcePack";
   author: string;
   license: string;
+  iconUrl: string | null;
+  downloads: number;
+  followers: number;
+  updatedAtUnix: number;
+  categories: string[];
   versions: Phase6ProjectVersion[];
 }
 
@@ -366,6 +374,7 @@ export interface Phase6ProfileIdInput {
 }
 
 export interface Phase6ProjectIdInput {
+  profileId: string;
   projectId: string;
 }
 

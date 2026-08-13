@@ -162,7 +162,7 @@ await withPreview(async (browser, baseUrl) => {
     const bodyWidth = await page.evaluate(() => ({ body: document.body.scrollWidth, root: document.documentElement.scrollWidth, viewport: window.innerWidth, language: document.documentElement.lang, title: document.title }));
     if (bodyWidth.body > bodyWidth.viewport + 1 || bodyWidth.root > bodyWidth.viewport + 1) throw new Error(`${item.slug}: document overflow ${JSON.stringify(bodyWidth)}`);
     const expectedLanguage = item.locale.startsWith("de") ? "de" : "en";
-    if (bodyWidth.language !== expectedLanguage || bodyWidth.title !== "S9Lab") throw new Error(`${item.slug}: document language/title mismatch ${JSON.stringify(bodyWidth)}`);
+    if (bodyWidth.language !== expectedLanguage || bodyWidth.title !== "SNine Launcher") throw new Error(`${item.slug}: document language/title mismatch ${JSON.stringify(bodyWidth)}`);
 
     await page.addScriptTag({ path: axePath });
     const violations = await page.evaluate(async () => {

@@ -1,8 +1,10 @@
 [package]
 name = "s9lab-launcher"
 version = "1.0.8"
-description = "Official S9Lab Minecraft Client Launcher"
-authors = ["S9Lab"]
+description = "Official SNine Minecraft Launcher"
+repository = "https://github.com/silas9k/S9Lab-Launcher"
+homepage = "https://github.com/silas9k/S9Lab-Launcher"
+authors = ["SNine"]
 edition = "2021"
 license = "All-Rights-Reserved"
 
@@ -43,4 +45,3 @@ windows-sys = { version = "=0.61.2", features = [
   "Win32_System_JobObjects",
   "Win32_System_Threading",
 ] }
-

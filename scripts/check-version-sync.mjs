@@ -17,7 +17,7 @@ const rustFiles = fs.readdirSync(rustRoot, { recursive: true })
   .map((relative) => path.join(rustRoot, String(relative)));
 for (const file of rustFiles) {
   const text = fs.readFileSync(file, "utf8");
-  if (/S9Lab-Launcher\/\d/.test(text)) errors.push(`${file}: fest codierte User-Agent-Version.`);
+  if (/(?:S9Lab|SNine)-Launcher\/\d/.test(text)) errors.push(`${file}: fest codierte User-Agent-Version.`);
   if (/MINECRAFT_LAUNCHER_VERSION",\s*"\d/.test(text)) errors.push(`${file}: fest codierte Launcher-Version.`);
 }
 

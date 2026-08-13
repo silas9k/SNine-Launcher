@@ -1,9 +1,9 @@
 import { Download, Minus, PanelLeft, Square, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import logo from "../../assets/logo.png";
 import { useI18n } from "../../i18n/I18nProvider";
 import { IconButton } from "../ui";
 import { useShellStore } from "../../app/shellStore";
+import { BrandMark } from "../brand/BrandMark";
 
 function invokeWindow(command: string): void {
   if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) void invoke(command);
@@ -17,7 +17,7 @@ export function TitleBar() {
     <header className="shell-titlebar" data-tauri-drag-region onDoubleClick={() => invokeWindow("window_toggle_maximize")}>
       <div className="shell-titlebar__brand" data-tauri-drag-region>
         <IconButton className="shell-titlebar__menu" label={t("navigation.expand")} onClick={() => setMobileNavigationOpen(true)}><PanelLeft aria-hidden="true" /></IconButton>
-        <img src={logo} alt="" aria-hidden="true" />
+        <BrandMark aria-hidden="true" />
         <div data-tauri-drag-region><strong>{t("app.name")}</strong><span>{t("titlebar.subtitle")}</span></div>
       </div>
       <div className="shell-titlebar__drag" data-tauri-drag-region />

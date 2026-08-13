@@ -751,6 +751,7 @@ export function RuntimePanel({ profile }: { profile: Phase4Profile | null }) {
 
   return (
     <aside
+      id="runtime-control"
       className={`home-panel home-status ${profile ? "home-status--selected" : ""}`}
       aria-busy={loadState === "loading" || isBusy}
     >

@@ -105,6 +105,9 @@ beforeEach(() => {
       contentType: "mod",
       author: "CaffeineMC",
       downloads: 42_000,
+      follows: 4_200,
+      iconUrl: "https://cdn.modrinth.com/data/project-lithium/icon.png",
+      updatedAtUnix: 1_900_000_000,
       latestVersion: "0.14.0",
     }],
   });
@@ -116,6 +119,11 @@ beforeEach(() => {
     contentType: "mod",
     author: "CaffeineMC",
     license: "LGPL-3.0",
+    iconUrl: "https://cdn.modrinth.com/data/project-lithium/icon.png",
+    downloads: 42_000,
+    followers: 4_200,
+    updatedAtUnix: 1_900_000_000,
+    categories: ["optimization"],
     versions: [{
       versionId: "version-lithium",
       versionNumber: "0.14.0",
@@ -186,6 +194,10 @@ describe("phase 6 content editor", () => {
     }));
     const resultTitle = await screen.findByText("Lithium");
     await user.click(resultTitle.closest("button")!);
+    await waitFor(() => expect(mocks.project).toHaveBeenCalledWith(
+      "profile-content",
+      "project-lithium",
+    ));
     expect(await screen.findByRole("heading", { name: "Lithium" })).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Install verified" }));
     await waitFor(() => expect(mocks.install).toHaveBeenCalledWith(
@@ -214,6 +226,39 @@ describe("phase 6 content editor", () => {
     expect(screen.queryByText("The local file was verified, hashed and added to the new revision.")).not.toBeInTheDocument();
   });
 
+  it("allows the verified resolver to install required Modrinth dependencies", async () => {
+    const user = userEvent.setup();
+    const detailWithDependency = await mocks.project();
+    mocks.project.mockResolvedValue({
+      ...detailWithDependency,
+      versions: [{
+        ...detailWithDependency.versions[0],
+        dependencies: [{
+          projectId: "fabric-api",
+          displayName: "Fabric API",
+          relation: "required",
+          satisfied: false,
+        }],
+      }],
+    });
+    mocks.project.mockClear();
+    renderEditor();
+    await screen.findByRole("heading", { name: "Sodium" });
+    await user.click(screen.getByRole("tab", { name: "Discover" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search Modrinth" }), "lithium");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    await user.click(await screen.findByText("Lithium"));
+
+    const install = await screen.findByRole("button", { name: "Install verified" });
+    expect(install).toBeEnabled();
+    await user.click(install);
+    await waitFor(() => expect(mocks.install).toHaveBeenCalledWith(
+      "profile-content",
+      "project-lithium",
+      "version-lithium",
+    ));
+  });
+
   it("keeps pack-managed members visibly read-only for update and removal", async () => {
     const managedSnapshot = {
       ...snapshot,
@@ -228,6 +273,21 @@ describe("phase 6 content editor", () => {
     expect(screen.getByRole("button", { name: "Remove" })).toBeDisabled();
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  it("checks update metadata without attempting a failing update when none is advertised", async () => {
+    const user = userEvent.setup();
+    const currentSnapshot = {
+      ...snapshot,
+      content: [{ ...snapshot.content[0], update: null }],
+    };
+    mocks.snapshot.mockResolvedValue(currentSnapshot);
+    mocks.checkUpdates.mockResolvedValue(currentSnapshot);
+    renderEditor();
+
+    await user.click(await screen.findByRole("button", { name: "Check for updates" }));
+    await waitFor(() => expect(mocks.checkUpdates).toHaveBeenCalled());
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it("requires confirmation before removing an installed entry", async () => {
