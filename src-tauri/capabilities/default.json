@@ -1,19 +1,17 @@
 {
-    "$schema":  "../gen/schemas/desktop-schema.json",
-    "identifier":  "default",
-    "description":  "Permissions for the S9Lab Launcher main window",
-    "windows":  [
-                    "main"
-                ],
-    "permissions":  [
-                        "core:default",
-                        "opener:default",
-                        "core:window:allow-minimize",
-                        "core:window:allow-toggle-maximize",
-                        "core:window:allow-close",
-                        "core:window:allow-start-dragging",
-                        "core:window:allow-is-maximized",
-                        "updater:default",
-                        "process:default"
-                    ]
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions for the SNine Launcher main window",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-is-maximized"
+  ]
 }

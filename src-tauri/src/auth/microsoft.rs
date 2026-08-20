@@ -1,34 +1,48 @@
 use crate::{
-    auth::{
-        model::{Account, AccountKind, AccountSession},
-        store,
-    },
+    auth::model::AccountSession,
     error::{AppError, AppResult},
-    logging,
 };
 use chrono::Utc;
 use reqwest::{Client, StatusCode};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
-use std::time::{Duration, Instant};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::{Duration, Instant},
+};
 use tokio::time::sleep;
 
 pub const MICROSOFT_CLIENT_ID: &str = "e686aebd-d575-4472-b163-b0c54f388f43";
 const MICROSOFT_SCOPE: &str = "XboxLive.signin offline_access";
 const DEVICE_CODE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
 const TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
+const XBOX_AUTH_URL: &str = "https://user.auth.xboxlive.com/user/authenticate";
+const XSTS_URL: &str = "https://xsts.auth.xboxlive.com/xsts/authorize";
+const MINECRAFT_LOGIN_URL: &str =
+    "https://api.minecraftservices.com/authentication/login_with_xbox";
+const MINECRAFT_ENTITLEMENTS_URL: &str = "https://api.minecraftservices.com/entitlements/mcstore";
+const MINECRAFT_PROFILE_URL: &str = "https://api.minecraftservices.com/minecraft/profile";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MicrosoftDeviceCode {
+#[derive(Debug, Clone)]
+pub(crate) struct DeviceCodeSecret {
     pub device_code: String,
     pub user_code: String,
     pub verification_uri: String,
-    #[serde(default)]
-    pub verification_uri_complete: Option<String>,
     pub expires_in: u64,
-    #[serde(default = "default_interval")]
     pub interval: u64,
-    pub message: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeviceCodeResponse {
+    device_code: String,
+    user_code: String,
+    verification_uri: String,
+    expires_in: u64,
+    #[serde(default = "default_interval")]
+    interval: u64,
 }
 
 fn default_interval() -> u64 {
@@ -40,15 +54,11 @@ struct MicrosoftTokenResponse {
     access_token: String,
     #[serde(default)]
     refresh_token: Option<String>,
-    #[serde(rename = "expires_in")]
-    _expires_in: i64,
 }
 
 #[derive(Debug, Deserialize)]
 struct MicrosoftTokenError {
     error: String,
-    #[serde(default)]
-    error_description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -78,287 +88,404 @@ struct MinecraftLoginResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct MinecraftEntitlementsResponse {
+    #[serde(default)]
+    items: Vec<MinecraftEntitlement>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MinecraftEntitlement {
+    #[serde(default)]
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct MinecraftProfileResponse {
     id: String,
     name: String,
 }
 
-pub async fn start_login() -> AppResult<MicrosoftDeviceCode> {
-    let response = http_client()?
-        .post(DEVICE_CODE_URL)
-        .form(&[
-            ("client_id", MICROSOFT_CLIENT_ID),
-            ("scope", MICROSOFT_SCOPE),
-        ])
-        .send()
-        .await?;
-    parse_success_json(response, "Microsoft Device-Code").await
+#[derive(Debug)]
+pub(crate) struct VerifiedMinecraftSession {
+    pub account_id: String,
+    pub username: String,
+    pub session: AccountSession,
+    pub verified_at_unix: i64,
 }
 
-pub async fn complete_login(
-    device_code: &str,
-    interval: u64,
-    expires_in: u64,
-) -> AppResult<Account> {
-    let client = http_client()?;
-    let microsoft = poll_microsoft_token(&client, device_code, interval, expires_in).await?;
-    let (profile, minecraft, xuid) =
-        exchange_for_minecraft(&client, &microsoft.access_token).await?;
-    let now = Utc::now().timestamp();
-    let account = Account {
-        id: profile.id,
-        username: profile.name,
-        kind: AccountKind::Microsoft,
-        added_at_unix: now,
-        last_used_at_unix: now,
-    };
-    let session = AccountSession {
-        microsoft_refresh_token: microsoft.refresh_token,
-        minecraft_access_token: minecraft.access_token,
-        minecraft_expires_at_unix: now + minecraft.expires_in,
-        xuid,
-    };
-    let saved = store::upsert_account(account, &session)?;
-    logging::append(&format!("Microsoft-Account verbunden: {}", saved.username))?;
-    Ok(saved)
+#[derive(Clone)]
+pub(crate) struct MicrosoftApi {
+    client: Client,
 }
 
-pub async fn ensure_minecraft_session(account_id: &str) -> AppResult<(Account, AccountSession)> {
-    let account = store::list_accounts()?
-        .into_iter()
-        .find(|account| account.id == account_id)
-        .ok_or_else(|| AppError::AccountNotFound(account_id.to_string()))?;
-    let mut session = store::load_session(account_id)?;
-    let now = Utc::now().timestamp();
-    if session.minecraft_expires_at_unix > now + 300 {
-        let selected = store::select_account(account_id)?;
-        return Ok((selected, session));
+impl MicrosoftApi {
+    pub fn new() -> AppResult<Self> {
+        Ok(Self {
+            client: Client::builder()
+                .user_agent(concat!("SNine-Launcher/", env!("CARGO_PKG_VERSION")))
+                .connect_timeout(Duration::from_secs(15))
+                .timeout(Duration::from_secs(50))
+                .redirect(reqwest::redirect::Policy::none())
+                .build()?,
+        })
     }
 
-    let refresh = session.microsoft_refresh_token.clone().ok_or_else(|| {
-        AppError::Message(
-            "Microsoft-Sitzung ist abgelaufen. Bitte den Account erneut anmelden.".into(),
-        )
-    })?;
-    let client = http_client()?;
-    let microsoft = refresh_microsoft_token(&client, &refresh).await?;
-    let (profile, minecraft, xuid) =
-        exchange_for_minecraft(&client, &microsoft.access_token).await?;
-    session.microsoft_refresh_token = microsoft.refresh_token.or(Some(refresh));
-    session.minecraft_access_token = minecraft.access_token;
-    session.minecraft_expires_at_unix = now + minecraft.expires_in;
-    if xuid.is_some() {
-        session.xuid = xuid;
-    }
-    store::save_session(account_id, &session)?;
-    store::update_account_name(account_id, &profile.name)?;
-    let refreshed = Account {
-        username: profile.name,
-        ..account
-    };
-    logging::append(&format!(
-        "Minecraft-Sitzung erneuert: {}",
-        refreshed.username
-    ))?;
-    Ok((refreshed, session))
-}
-
-fn http_client() -> AppResult<Client> {
-    Ok(Client::builder()
-        .user_agent("S9Lab-Launcher/1.0.0")
-        .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(50))
-        .build()?)
-}
-
-async fn poll_microsoft_token(
-    client: &Client,
-    device_code: &str,
-    initial_interval: u64,
-    expires_in: u64,
-) -> AppResult<MicrosoftTokenResponse> {
-    let deadline = Instant::now() + Duration::from_secs(expires_in.max(60));
-    let mut interval = initial_interval.max(5);
-    while Instant::now() < deadline {
-        sleep(Duration::from_secs(interval)).await;
-        let response = client
-            .post(TOKEN_URL)
+    pub async fn request_device_code(&self, locale: &str) -> AppResult<DeviceCodeSecret> {
+        let locale = match locale {
+            "de" => "de-DE",
+            "en" => "en-US",
+            _ => return Err(AppError::coded("auth_locale_invalid")),
+        };
+        let response = self
+            .client
+            .post(DEVICE_CODE_URL)
+            .query(&[("mkt", locale)])
             .form(&[
-                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
                 ("client_id", MICROSOFT_CLIENT_ID),
-                ("device_code", device_code),
+                ("scope", MICROSOFT_SCOPE),
             ])
             .send()
             .await?;
-        if response.status().is_success() {
-            return Ok(response.json().await?);
+        let response: DeviceCodeResponse = parse_success_json(response, "device_code").await?;
+        validate_verification_uri(&response.verification_uri)?;
+        if response.device_code.trim().is_empty() || response.user_code.trim().is_empty() {
+            return Err(AppError::coded("auth_device_response_invalid"));
         }
-        let error: MicrosoftTokenError = response.json().await?;
-        match error.error.as_str() {
-            "authorization_pending" => continue,
-            "slow_down" => {
-                interval += 5;
-                continue;
-            }
-            "authorization_declined" => {
-                return Err(AppError::Message(
-                    "Microsoft-Anmeldung wurde abgelehnt.".into(),
-                ))
-            }
-            "expired_token" => {
-                return Err(AppError::Message(
-                    "Der Microsoft-Code ist abgelaufen. Bitte erneut starten.".into(),
-                ))
-            }
-            _ => {
-                return Err(AppError::Message(
-                    error.error_description.unwrap_or(error.error),
-                ))
-            }
-        }
+        Ok(DeviceCodeSecret {
+            device_code: response.device_code,
+            user_code: response.user_code,
+            verification_uri: response.verification_uri,
+            expires_in: response.expires_in,
+            interval: response.interval.max(5),
+        })
     }
-    Err(AppError::Message(
-        "Microsoft-Anmeldung ist abgelaufen. Bitte erneut versuchen.".into(),
-    ))
-}
 
-async fn refresh_microsoft_token(
-    client: &Client,
-    refresh_token: &str,
-) -> AppResult<MicrosoftTokenResponse> {
-    let response = client
-        .post(TOKEN_URL)
-        .form(&[
-            ("client_id", MICROSOFT_CLIENT_ID),
-            ("grant_type", "refresh_token"),
-            ("refresh_token", refresh_token),
-            ("scope", MICROSOFT_SCOPE),
-        ])
-        .send()
-        .await?;
-    parse_success_json(response, "Microsoft Token Refresh").await
-}
+    pub async fn complete_device_login(
+        &self,
+        secret: &DeviceCodeSecret,
+        cancelled: Arc<AtomicBool>,
+    ) -> AppResult<VerifiedMinecraftSession> {
+        let microsoft = self.poll_token(secret, cancelled).await?;
+        let refresh_token = microsoft
+            .refresh_token
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| AppError::coded("auth_refresh_token_missing"))?;
+        self.exchange_for_minecraft(&microsoft.access_token, refresh_token)
+            .await
+    }
 
-async fn exchange_for_minecraft(
-    client: &Client,
-    microsoft_access_token: &str,
-) -> AppResult<(
-    MinecraftProfileResponse,
-    MinecraftLoginResponse,
-    Option<String>,
-)> {
-    let xbl = authenticate_xbox_live(client, microsoft_access_token).await?;
-    let xbl_claim = xbl
-        .display_claims
-        .xui
-        .first()
-        .ok_or_else(|| AppError::Message("Xbox Live lieferte keinen Benutzer-Hash.".into()))?;
-    let user_hash = xbl_claim.uhs.clone();
-    let xsts = authorize_xsts(client, &xbl.token).await?;
-    let xuid = xsts
-        .display_claims
-        .xui
-        .first()
-        .and_then(|claim| claim.xid.clone())
-        .or_else(|| xbl_claim.xid.clone());
-    let minecraft = login_minecraft(client, &user_hash, &xsts.token).await?;
-    let profile = fetch_minecraft_profile(client, &minecraft.access_token).await?;
-    Ok((profile, minecraft, xuid))
-}
+    pub async fn refresh_session(
+        &self,
+        refresh_token: &str,
+    ) -> AppResult<VerifiedMinecraftSession> {
+        if refresh_token.trim().is_empty() {
+            return Err(AppError::coded("auth_refresh_token_missing"));
+        }
+        let response = self
+            .client
+            .post(TOKEN_URL)
+            .form(&[
+                ("client_id", MICROSOFT_CLIENT_ID),
+                ("grant_type", "refresh_token"),
+                ("refresh_token", refresh_token),
+                ("scope", MICROSOFT_SCOPE),
+            ])
+            .send()
+            .await?;
+        let microsoft: MicrosoftTokenResponse = parse_success_json(response, "refresh").await?;
+        let rotated_refresh = microsoft
+            .refresh_token
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| refresh_token.to_string());
+        self.exchange_for_minecraft(&microsoft.access_token, rotated_refresh)
+            .await
+    }
 
-async fn authenticate_xbox_live(
-    client: &Client,
-    microsoft_access_token: &str,
-) -> AppResult<XboxAuthResponse> {
-    send_xbox_request(
-        client,
-        "https://user.auth.xboxlive.com/user/authenticate",
-        json!({
-            "Properties": {
-                "AuthMethod": "RPS",
-                "SiteName": "user.auth.xboxlive.com",
-                "RpsTicket": format!("d={microsoft_access_token}")
+    async fn poll_token(
+        &self,
+        secret: &DeviceCodeSecret,
+        cancelled: Arc<AtomicBool>,
+    ) -> AppResult<MicrosoftTokenResponse> {
+        let deadline = Instant::now() + Duration::from_secs(secret.expires_in.max(60));
+        let mut interval = secret.interval.max(5);
+        while Instant::now() < deadline {
+            if cancelled.load(Ordering::Acquire) {
+                return Err(AppError::coded("auth_device_login_cancelled"));
+            }
+            sleep(Duration::from_secs(interval)).await;
+            if cancelled.load(Ordering::Acquire) {
+                return Err(AppError::coded("auth_device_login_cancelled"));
+            }
+            let response = self
+                .client
+                .post(TOKEN_URL)
+                .form(&[
+                    ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+                    ("client_id", MICROSOFT_CLIENT_ID),
+                    ("device_code", secret.device_code.as_str()),
+                ])
+                .send()
+                .await?;
+            if response.status().is_success() {
+                return response
+                    .json()
+                    .await
+                    .map_err(|_| AppError::coded("auth_token_response_invalid"));
+            }
+            let status = response.status();
+            let error = response
+                .json::<MicrosoftTokenError>()
+                .await
+                .map_err(|_| remote_error("device_token", status))?;
+            match error.error.as_str() {
+                "authorization_pending" => continue,
+                "slow_down" => {
+                    interval = interval.saturating_add(5).min(30);
+                    continue;
+                }
+                "authorization_declined" => {
+                    return Err(AppError::coded("auth_authorization_declined"));
+                }
+                "expired_token" => return Err(AppError::coded("auth_device_code_expired")),
+                "bad_verification_code" => {
+                    return Err(AppError::coded("auth_device_code_invalid"));
+                }
+                _ => return Err(remote_error("device_token", status)),
+            }
+        }
+        Err(AppError::coded("auth_device_code_expired"))
+    }
+
+    async fn exchange_for_minecraft(
+        &self,
+        microsoft_access_token: &str,
+        refresh_token: String,
+    ) -> AppResult<VerifiedMinecraftSession> {
+        let xbl = self.authenticate_xbox_live(microsoft_access_token).await?;
+        let xbl_claim = xbl
+            .display_claims
+            .xui
+            .first()
+            .ok_or_else(|| AppError::coded("auth_xbox_claim_missing"))?;
+        let user_hash = xbl_claim.uhs.clone();
+        let xsts = self.authorize_xsts(&xbl.token).await?;
+        let xuid = xsts
+            .display_claims
+            .xui
+            .first()
+            .and_then(|claim| claim.xid.clone())
+            .or_else(|| xbl_claim.xid.clone());
+        let minecraft = self.login_minecraft(&user_hash, &xsts.token).await?;
+        self.verify_entitlement(&minecraft.access_token).await?;
+        let profile = self
+            .fetch_minecraft_profile(&minecraft.access_token)
+            .await?;
+        let now = Utc::now().timestamp();
+        Ok(VerifiedMinecraftSession {
+            account_id: profile.id,
+            username: profile.name,
+            session: AccountSession {
+                microsoft_refresh_token: refresh_token,
+                minecraft_access_token: Some(minecraft.access_token),
+                minecraft_expires_at_unix: now.saturating_add(minecraft.expires_in.max(0)),
+                xuid,
             },
-            "RelyingParty": "http://auth.xboxlive.com",
-            "TokenType": "JWT"
-        }),
-    )
-    .await
-}
-
-async fn authorize_xsts(client: &Client, xbox_token: &str) -> AppResult<XboxAuthResponse> {
-    send_xbox_request(
-        client,
-        "https://xsts.auth.xboxlive.com/xsts/authorize",
-        json!({
-            "Properties": { "SandboxId": "RETAIL", "UserTokens": [xbox_token] },
-            "RelyingParty": "rp://api.minecraftservices.com/",
-            "TokenType": "JWT"
-        }),
-    )
-    .await
-}
-
-async fn send_xbox_request(client: &Client, url: &str, body: Value) -> AppResult<XboxAuthResponse> {
-    let response = client.post(url).json(&body).send().await?;
-    let status = response.status();
-    let text = response.text().await?;
-    if status.is_success() {
-        return Ok(serde_json::from_str(&text)?);
+            verified_at_unix: now,
+        })
     }
-    let xerr = serde_json::from_str::<Value>(&text)
-        .ok()
-        .and_then(|value| value.get("XErr").and_then(Value::as_i64));
-    let message = match xerr {
-        Some(2148916233) => "Für diesen Microsoft-Account existiert noch kein Xbox-Profil.",
-        Some(2148916235) => "Xbox Live ist in der Region dieses Accounts nicht verfügbar.",
-        Some(2148916236 | 2148916237) => "Dieser Xbox-Account benötigt eine Altersverifikation.",
-        Some(2148916238) => "Kinderaccounts müssen von einem Familienkonto freigegeben werden.",
-        _ => "Xbox-/XSTS-Anmeldung ist fehlgeschlagen.",
-    };
-    Err(AppError::Message(format!("{message} ({status}) {text}")))
-}
 
-async fn login_minecraft(
-    client: &Client,
-    user_hash: &str,
-    xsts_token: &str,
-) -> AppResult<MinecraftLoginResponse> {
-    let response = client
-        .post("https://api.minecraftservices.com/authentication/login_with_xbox")
-        .json(&json!({ "identityToken": format!("XBL3.0 x={user_hash};{xsts_token}") }))
-        .send()
-        .await?;
-    parse_success_json(response, "Minecraft Services Login").await
-}
-
-async fn fetch_minecraft_profile(
-    client: &Client,
-    access_token: &str,
-) -> AppResult<MinecraftProfileResponse> {
-    let response = client
-        .get("https://api.minecraftservices.com/minecraft/profile")
-        .bearer_auth(access_token)
-        .send()
-        .await?;
-    if response.status() == StatusCode::NOT_FOUND {
-        return Err(AppError::Message(
-            "Dieser Microsoft-Account besitzt kein Minecraft: Java Edition Profil.".into(),
-        ));
+    async fn authenticate_xbox_live(
+        &self,
+        microsoft_access_token: &str,
+    ) -> AppResult<XboxAuthResponse> {
+        self.send_xbox_request(
+            XBOX_AUTH_URL,
+            json!({
+                "Properties": {
+                    "AuthMethod": "RPS",
+                    "SiteName": "user.auth.xboxlive.com",
+                    "RpsTicket": format!("d={microsoft_access_token}")
+                },
+                "RelyingParty": "http://auth.xboxlive.com",
+                "TokenType": "JWT"
+            }),
+        )
+        .await
     }
-    parse_success_json(response, "Minecraft Profil").await
+
+    async fn authorize_xsts(&self, xbox_token: &str) -> AppResult<XboxAuthResponse> {
+        self.send_xbox_request(
+            XSTS_URL,
+            json!({
+                "Properties": { "SandboxId": "RETAIL", "UserTokens": [xbox_token] },
+                "RelyingParty": "rp://api.minecraftservices.com/",
+                "TokenType": "JWT"
+            }),
+        )
+        .await
+    }
+
+    async fn send_xbox_request(&self, url: &str, body: Value) -> AppResult<XboxAuthResponse> {
+        let response = self.client.post(url).json(&body).send().await?;
+        let status = response.status();
+        if response.status().is_success() {
+            return response
+                .json()
+                .await
+                .map_err(|_| AppError::coded("auth_xbox_response_invalid"));
+        }
+        let xerr = response
+            .json::<Value>()
+            .await
+            .ok()
+            .and_then(|value| value.get("XErr").and_then(Value::as_i64));
+        let code = match xerr {
+            Some(2148916233) => "auth_xbox_profile_missing",
+            Some(2148916235) => "auth_xbox_region_blocked",
+            Some(2148916236 | 2148916237) => "auth_xbox_age_verification_required",
+            Some(2148916238) => "auth_xbox_family_approval_required",
+            _ => "auth_xbox_failed",
+        };
+        Err(AppError::coded_with(
+            code,
+            [("status", status.as_u16().to_string())],
+        ))
+    }
+
+    async fn login_minecraft(
+        &self,
+        user_hash: &str,
+        xsts_token: &str,
+    ) -> AppResult<MinecraftLoginResponse> {
+        let response = self
+            .client
+            .post(MINECRAFT_LOGIN_URL)
+            .json(&json!({ "identityToken": format!("XBL3.0 x={user_hash};{xsts_token}") }))
+            .send()
+            .await?;
+        parse_success_json(response, "minecraft_login").await
+    }
+
+    async fn verify_entitlement(&self, access_token: &str) -> AppResult<()> {
+        let response = self
+            .client
+            .get(MINECRAFT_ENTITLEMENTS_URL)
+            .bearer_auth(access_token)
+            .send()
+            .await?;
+        let entitlements: MinecraftEntitlementsResponse =
+            parse_success_json(response, "minecraft_entitlements").await?;
+        if owns_minecraft_java(&entitlements) {
+            Ok(())
+        } else {
+            Err(AppError::coded("auth_minecraft_ownership_missing"))
+        }
+    }
+
+    async fn fetch_minecraft_profile(
+        &self,
+        access_token: &str,
+    ) -> AppResult<MinecraftProfileResponse> {
+        let response = self
+            .client
+            .get(MINECRAFT_PROFILE_URL)
+            .bearer_auth(access_token)
+            .send()
+            .await?;
+        if response.status() == StatusCode::NOT_FOUND {
+            return Err(AppError::coded("auth_minecraft_profile_missing"));
+        }
+        parse_success_json(response, "minecraft_profile").await
+    }
+}
+
+fn owns_minecraft_java(entitlements: &MinecraftEntitlementsResponse) -> bool {
+    entitlements.items.iter().any(|item| {
+        let name = item.name.to_ascii_lowercase();
+        name == "game_minecraft" || name == "product_minecraft"
+    })
+}
+
+fn validate_verification_uri(value: &str) -> AppResult<()> {
+    let url =
+        reqwest::Url::parse(value).map_err(|_| AppError::coded("auth_verification_uri_invalid"))?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| AppError::coded("auth_verification_uri_invalid"))?;
+    let allowed = host.eq_ignore_ascii_case("microsoft.com")
+        || host.ends_with(".microsoft.com")
+        || host.eq_ignore_ascii_case("microsoftonline.com")
+        || host.ends_with(".microsoftonline.com");
+    if url.scheme() != "https"
+        || !allowed
+        || url.username() != ""
+        || url.password().is_some()
+        || url.port().is_some()
+    {
+        return Err(AppError::coded("auth_verification_uri_invalid"));
+    }
+    Ok(())
 }
 
 async fn parse_success_json<T: for<'de> Deserialize<'de>>(
     response: reqwest::Response,
-    label: &str,
+    service: &str,
 ) -> AppResult<T> {
     let status = response.status();
-    let body = response.text().await?;
     if !status.is_success() {
-        return Err(AppError::Message(format!(
-            "{label} fehlgeschlagen ({status}): {body}"
-        )));
+        return Err(remote_error(service, status));
     }
-    Ok(serde_json::from_str(&body)?)
+    response
+        .json()
+        .await
+        .map_err(|_| AppError::coded_with("auth_remote_response_invalid", [("service", service)]))
+}
+
+fn remote_error(service: &str, status: StatusCode) -> AppError {
+    AppError::coded_with(
+        "auth_remote_error",
+        [
+            ("service", service.to_string()),
+            ("status", status.as_u16().to_string()),
+        ],
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ownership_requires_a_minecraft_entitlement() {
+        let owned: MinecraftEntitlementsResponse =
+            serde_json::from_str(r#"{"items":[{"name":"game_minecraft"}]}"#)
+                .expect("owned fixture");
+        let empty: MinecraftEntitlementsResponse =
+            serde_json::from_str(r#"{"items":[]}"#).expect("empty fixture");
+        let lookalike: MinecraftEntitlementsResponse =
+            serde_json::from_str(r#"{"items":[{"name":"unrelated_minecraft_preview"}]}"#)
+                .expect("lookalike fixture");
+        assert!(owns_minecraft_java(&owned));
+        assert!(!owns_minecraft_java(&empty));
+        assert!(!owns_minecraft_java(&lookalike));
+    }
+
+    #[test]
+    fn only_expected_https_verification_hosts_are_accepted() {
+        assert!(validate_verification_uri("https://www.microsoft.com/link").is_ok());
+        let non_https = ["http", "://www.microsoft.com/link"].concat();
+        let reserved_host = ["https://microsoft.com", ".invalid/link"].concat();
+        let embedded_credentials = ["https", "://user:pass@www.microsoft.com/link"].concat();
+        assert!(validate_verification_uri(&non_https).is_err());
+        assert!(validate_verification_uri(&reserved_host).is_err());
+        assert!(validate_verification_uri(&embedded_credentials).is_err());
+    }
+
+    #[test]
+    fn remote_errors_never_contain_response_bodies() {
+        let error = remote_error("fixture", StatusCode::UNAUTHORIZED).descriptor();
+        assert_eq!(error.code, "auth_remote_error");
+        assert_eq!(error.params.get("status").map(String::as_str), Some("401"));
+        assert_eq!(error.params.len(), 2);
+    }
 }

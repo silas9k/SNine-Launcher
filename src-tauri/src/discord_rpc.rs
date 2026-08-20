@@ -1,6 +1,12 @@
 use discord_rich_presence::{activity, DiscordIpc, DiscordIpcClient};
 use serde::Deserialize;
-use std::{thread, time::Duration};
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    thread,
+    time::Duration,
+};
+
+static RPC_ENABLED: AtomicBool = AtomicBool::new(true);
 
 #[derive(Debug, Clone, Deserialize)]
 struct DiscordRpcConfig {
@@ -11,17 +17,6 @@ struct DiscordRpcConfig {
     large_image: String,
     large_text: String,
     reconnect_seconds: u64,
-}
-
-impl DiscordRpcConfig {
-    fn is_ready(&self) -> bool {
-        self.enabled
-            && self.client_id.len() >= 17
-            && self
-                .client_id
-                .chars()
-                .all(|character| character.is_ascii_digit())
-    }
 }
 
 fn load_config() -> Option<DiscordRpcConfig> {
@@ -50,7 +45,9 @@ pub fn start() {
         return;
     };
 
-    if !config.is_ready() {
+    RPC_ENABLED.store(config.enabled, Ordering::Relaxed);
+
+    if config.client_id.len() < 17 || !config.client_id.chars().all(|character| character.is_ascii_digit()) {
         eprintln!(
             "[discord-rpc] Deaktiviert oder keine gültige Discord Application ID eingetragen."
         );
@@ -63,6 +60,11 @@ pub fn start() {
             let retry_delay = Duration::from_secs(config.reconnect_seconds.clamp(5, 120));
 
             loop {
+                if !RPC_ENABLED.load(Ordering::Relaxed) {
+                    thread::sleep(Duration::from_millis(500));
+                    continue;
+                }
+
                 let mut client = DiscordIpcClient::new(&config.client_id);
 
                 match client.connect() {
@@ -75,8 +77,16 @@ pub fn start() {
                             );
                         }
 
-                        loop {
-                            thread::sleep(Duration::from_secs(30));
+                        'connected: loop {
+                            for _ in 0..30 {
+                                thread::sleep(Duration::from_secs(1));
+                                if !RPC_ENABLED.load(Ordering::Relaxed) {
+                                    let _ = client.clear_activity();
+                                    let _ = client.close();
+                                    eprintln!("[discord-rpc] Vom Benutzer deaktiviert.");
+                                    break 'connected;
+                                }
+                            }
 
                             if let Err(error) = client.set_activity(create_activity(&config)) {
                                 eprintln!(
@@ -96,4 +106,13 @@ pub fn start() {
                 thread::sleep(retry_delay);
             }
         });
+}
+
+#[tauri::command]
+pub fn discord_rpc_set_enabled(enabled: bool) {
+    RPC_ENABLED.store(enabled, Ordering::Relaxed);
+    eprintln!(
+        "[discord-rpc] Einstellung geändert: {}",
+        if enabled { "aktiv" } else { "inaktiv" }
+    );
 }

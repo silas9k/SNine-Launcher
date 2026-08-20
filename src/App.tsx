@@ -1,87 +1,75 @@
-import { LauncherEnhancements } from "./components/LauncherEnhancements";
-import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, LoaderCircle, X } from "lucide-react";
-import { Sidebar } from "./components/Sidebar";
-import { TitleBar } from "./components/TitleBar";
-import { Modal } from "./components/Modal";
-import { commands, type PendingDesignImport } from "./lib/commands";
-import { DEFAULT_DESIGN, parseDesignPreset } from "./lib/designProfiles";
-import { AccountsPage } from "./pages/Accounts";
-import { FriendsPage } from "./pages/Friends";
-import { HomePage } from "./pages/Home";
-import { LogsPage } from "./pages/Logs";
-import { SettingsPage } from "./pages/Settings";
-import { ShopPage } from "./pages/Shop";
-import { useLauncherStore } from "./store/launcherStore";
+import { useEffect } from "react";
+import { LoaderCircle } from "lucide-react";
+import { AppErrorBoundary } from "./app/ErrorBoundary";
+import { useShellStore } from "./app/shellStore";
+import { TitleBar } from "./components/shell/TitleBar";
+import { Toasts } from "./components/shell/Toasts";
+import { I18nProvider, useI18n } from "./i18n/I18nProvider";
+import { HomePage } from "./pages/HomePage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { SkinsPage } from "./pages/SkinsPage";
+import { applyShellTheme } from "./theme/applyTheme";
+import { applyLauncherBackground } from "./theme/launcherBackground";
+import { applyLauncherFont } from "./theme/launcherFont";
+import { applyLauncherFontScale } from "./theme/launcherFontSize";
+import { applyLauncherCornerRadius } from "./theme/launcherCorners";
+import { applyDiscordRpcPreference, loadLauncherPreferences } from "./theme/launcherPreferences";
 
-export default function App() {
-  const { page, setPage, bootstrap, initialized, busy, error, notice, clearMessage, snapshot, updateSettings } = useLauncherStore();
-  const [pendingDesign, setPendingDesign] = useState<PendingDesignImport | null>(null);
-  const [designImportError, setDesignImportError] = useState<string | null>(null);
+function ShellContent() {
+  const { t } = useI18n();
+  const initialized = useShellStore((state) => state.initialized);
+  const loading = useShellStore((state) => state.loading);
+  const bootstrap = useShellStore((state) => state.bootstrap);
+  const settings = useShellStore((state) => state.settings);
+  const page = useShellStore((state) => state.page);
 
+  useEffect(() => {
+    applyLauncherBackground();
+    void applyLauncherFont();
+    applyLauncherFontScale();
+    applyLauncherCornerRadius();
+    void applyDiscordRpcPreference(loadLauncherPreferences().discordRpc).catch((error) => {
+      console.warn("[SNine Launcher] Discord RPC preference could not be applied", error);
+    });
+  }, []);
   useEffect(() => { void bootstrap(); }, [bootstrap]);
   useEffect(() => {
-    void commands.pendingDesignImport().then((value) => { if (value) setPendingDesign(value); }).catch(() => undefined);
-  }, []);
-  useEffect(() => {
-    const settings = useLauncherStore.getState().snapshot?.settings;
-    if (!settings) return;
-    document.documentElement.style.setProperty("--accent", settings.accent_color);
-    document.documentElement.style.setProperty("--glow-strength", `${settings.glow_intensity / 100}`);
-    document.documentElement.style.setProperty("--accent-secondary", settings.secondary_accent);
-    document.documentElement.style.setProperty("--surface-opacity", `${settings.surface_opacity / 100}`);
-  }, [initialized, snapshot?.settings.accent_color, snapshot?.settings.glow_intensity, snapshot?.settings.secondary_accent, snapshot?.settings.surface_opacity]);
-
-  const content = page === "accounts" ? <AccountsPage />
-    : page === "settings" ? <SettingsPage />
-    : page === "logs" ? <LogsPage />
-    : page === "friends" ? <FriendsPage />
-    : page === "shop" ? <ShopPage />
-    : <HomePage />;
-
-  const settings = snapshot?.settings;
-  const classes = [
-    "app-shell",
-    `theme-${settings?.background_style ?? "void"}`,
-    `density-${settings?.ui_density ?? "comfortable"}`,
-    `panels-${settings?.panel_style ?? "glass"}`,
-    `corners-${settings?.corner_style ?? "soft"}`,
-    settings?.sidebar_labels ? "sidebar-labels" : "",
-    settings?.reduced_motion ? "reduced-motion" : "",
-    settings?.background_motion ? "background-motion" : "background-static",
-  ].filter(Boolean).join(" ");
+    const dark = window.matchMedia("(prefers-color-scheme: dark)");
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const refresh = () => applyShellTheme(settings);
+    dark.addEventListener("change", refresh);
+    motion.addEventListener("change", refresh);
+    return () => {
+      dark.removeEventListener("change", refresh);
+      motion.removeEventListener("change", refresh);
+    };
+  }, [settings]);
 
   return (
-    <div className={classes}>
-      <TitleBar />
-      <LauncherEnhancements />
-      <div className="app-layout">
-        <Sidebar page={page} onChange={setPage} />
-        <main className="content">
-          {!initialized ? <div className="boot"><LoaderCircle className="spin" /><span>S9Lab Launcher wird geladenâ€¦</span></div> : content}
+    <AppErrorBoundary>
+      <div className="app-shell app-shell--home-only">
+        <TitleBar />
+        <main id="main-content" className="shell-content shell-content--home-only" tabIndex={0} aria-busy={!initialized || loading}>
+          {!initialized ? (
+            <div className="shell-loading" role="status">
+              <LoaderCircle className="ui-spin" aria-hidden="true" />
+              <h1>{t("app.loading")}</h1>
+            </div>
+          ) : page === "settings" ? (
+            <SettingsPage />
+          ) : page === "skins" ? (
+            <SkinsPage />
+          ) : (
+            <HomePage />
+          )}
         </main>
+        <Toasts />
       </div>
-      {busy && <div className="busy-indicator"><LoaderCircle className="spin" size={15} /> Vorgang lÃ¤uft</div>}
-      {error && <div className="toast toast--error"><AlertTriangle size={18} /><span>{error}</span><button onClick={clearMessage}><X size={16} /></button></div>}
-      {notice && <div className="toast toast--success"><CheckCircle2 size={18} /><span>{notice}</span><button onClick={clearMessage}><X size={16} /></button></div>}
-      {pendingDesign && <Modal title="S9Lab-Design importieren" onClose={() => setPendingDesign(null)}>
-        <div className="design-import-confirm">
-          <p>MÃ¶chtest du das Farbprofil <strong>{pendingDesign.file_name}</strong> importieren?</p>
-          {designImportError && <div className="friends-error">{designImportError}</div>}
-          <div className="modal-actions">
-            <button className="button" onClick={() => setPendingDesign(null)}>Nein</button>
-            <button className="button button--primary" onClick={() => {
-              if (!snapshot) return;
-              try {
-                const preset = parseDesignPreset(pendingDesign.content);
-                void updateSettings({ ...snapshot.settings, ...DEFAULT_DESIGN, ...preset.design }).then(() => { setPendingDesign(null); setPage("settings"); });
-              } catch (cause) { setDesignImportError(cause instanceof Error ? cause.message : "Import fehlgeschlagen."); }
-            }}>Ja, importieren</button>
-          </div>
-        </div>
-      </Modal>}
-    </div>
+    </AppErrorBoundary>
   );
 }
 
-
+export default function App() {
+  const locale = useShellStore((state) => state.settings.locale);
+  return <I18nProvider localeSetting={locale}><ShellContent /></I18nProvider>;
+}

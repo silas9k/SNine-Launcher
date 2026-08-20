@@ -3,21 +3,23 @@ dist/
 src-tauri/target/
 src-tauri/gen/
 *.log
+phase0-reports/
 
-# Private Updater-Schlüssel
-s9lab-updater.key
-s9lab-updater.key.pub
+# IDE and local workspace files
+.idea/
+.vscode/
 
-# Lokale Backups und temporäre Dateien
+# Private keys and signing material – never commit
+*.key
+!*.key.pub
+*.pem
+*.p12
+*.pfx
+*.cer.private
+*.evidence-key-copy
+
+# Local backups and temporary files
 patch-backup-*/
+.s9lab-patch-backup-*/
 *.backup-*
 client-update-upload/
-
-s9lab-updater.key
-s9lab-updater-old.key
-
-s9lab-updater.key
-s9lab-updater.key.pub
-s9lab-updater-broken.key
-s9lab-updater*.key
-s9lab-updater*.key.pub

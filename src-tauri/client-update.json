@@ -1,6 +1,0 @@
-{
-    "enabled":  true,
-    "url":  "https://s9lab.site/updates/s9labclient-latest.jar",
-    "timeout_seconds":  45,
-    "allow_insecure_http":  false
-}

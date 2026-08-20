@@ -1,8 +1,10 @@
 [package]
 name = "s9lab-launcher"
 version = "1.0.8"
-description = "Official S9Lab Minecraft Client Launcher"
-authors = ["S9Lab"]
+description = "Official SNine Minecraft Launcher"
+repository = "https://github.com/silas9k/S9Lab-Launcher"
+homepage = "https://github.com/silas9k/S9Lab-Launcher"
+authors = ["SNine"]
 edition = "2021"
 license = "All-Rights-Reserved"
 
@@ -15,8 +17,6 @@ tauri-build = { version = "=2.6.2", features = [] }
 
 [dependencies]
 sha2 = "0.10"
-tauri-plugin-process = "2"
-tauri-plugin-updater = "2"
 discord-rich-presence = "1.1.0"
 base64 = "0.22"
 tauri = { version = "=2.11.2", features = [] }
@@ -35,7 +35,13 @@ zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
 futures-util = "0.3"
 regex = "1"
 opener = "0.7"
+ring = "=0.17.14"
 
-
-
-
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+] }

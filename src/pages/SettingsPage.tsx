@@ -1,0 +1,225 @@
+import {
+  Eye,
+  Gamepad2,
+  Languages,
+  MessageCircle,
+  Palette,
+  RotateCcw,
+  Sparkles,
+  Type,
+  XCircle,
+  type LucideIcon,
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { useShellStore } from "../app/shellStore";
+import { useI18n } from "../i18n/I18nProvider";
+import type { LocaleSetting } from "../theme/types";
+import {
+  DEFAULT_LAUNCHER_BACKGROUND,
+  loadLauncherBackground,
+  resetLauncherBackground,
+  saveLauncherBackground,
+} from "../theme/launcherBackground";
+import {
+  DEFAULT_LAUNCHER_FONT,
+  loadLauncherFont,
+  resetLauncherFont,
+  saveLauncherFont,
+  type LauncherFontChoice,
+} from "../theme/launcherFont";
+import {
+  DEFAULT_LAUNCHER_FONT_SCALE,
+  loadLauncherFontScale,
+  MAX_LAUNCHER_FONT_SCALE,
+  MIN_LAUNCHER_FONT_SCALE,
+  resetLauncherFontScale,
+  saveLauncherFontScale,
+} from "../theme/launcherFontSize";
+import {
+  DEFAULT_LAUNCHER_CORNER_RADIUS,
+  loadLauncherCornerRadius,
+  MAX_LAUNCHER_CORNER_RADIUS,
+  MIN_LAUNCHER_CORNER_RADIUS,
+  resetLauncherCornerRadius,
+  saveLauncherCornerRadius,
+} from "../theme/launcherCorners";
+import {
+  applyDiscordRpcPreference,
+  loadLauncherPreferences,
+  resetLauncherPreferences,
+  saveLauncherPreferences,
+  type LauncherPreferences,
+} from "../theme/launcherPreferences";
+
+function formatPercent(value: number) {
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatPixels(value: number) {
+  return `${Math.round(value)}px`;
+}
+
+function SettingsRow({ icon: Icon, title, description, children, slider = false }: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  children: ReactNode;
+  slider?: boolean;
+}) {
+  return (
+    <article className={`snine-settings-card${slider ? " snine-settings-card--slider" : ""}`}>
+      <div className="snine-settings-card__icon"><Icon aria-hidden="true" /></div>
+      <div className="snine-settings-card__copy">
+        <strong>{title}</strong>
+        <span>{description}</span>
+      </div>
+      {children}
+    </article>
+  );
+}
+
+function Toggle({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="snine-settings-toggle" title={label}>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} aria-label={label} />
+      <span aria-hidden="true" />
+    </label>
+  );
+}
+
+export function SettingsPage() {
+  const { t } = useI18n();
+  const settings = useShellStore((state) => state.settings);
+  const saveSettings = useShellStore((state) => state.saveSettings);
+  const resetSettings = useShellStore((state) => state.resetSettings);
+  const loading = useShellStore((state) => state.loading);
+  const [preferences, setPreferences] = useState<LauncherPreferences>(() => loadLauncherPreferences());
+  const [backgroundColor, setBackgroundColor] = useState(() => loadLauncherBackground());
+  const [fontChoice, setFontChoice] = useState<LauncherFontChoice>(() => loadLauncherFont());
+  const [fontScale, setFontScale] = useState(() => loadLauncherFontScale());
+  const [cornerRadius, setCornerRadius] = useState(() => loadLauncherCornerRadius());
+
+  const update = <K extends keyof typeof settings>(key: K, value: (typeof settings)[K]) => {
+    void saveSettings({ ...settings, [key]: value });
+  };
+
+  const updatePreference = <K extends keyof LauncherPreferences>(key: K, value: LauncherPreferences[K]) => {
+    const saved = saveLauncherPreferences({ ...preferences, [key]: value });
+    setPreferences(saved);
+    if (key === "discordRpc") {
+      void applyDiscordRpcPreference(Boolean(value)).catch((error) => {
+        console.warn("[SNine Launcher] Discord RPC toggle failed", error);
+      });
+    }
+  };
+
+  const resetAll = async () => {
+    resetLauncherBackground();
+    setBackgroundColor(DEFAULT_LAUNCHER_BACKGROUND);
+    resetLauncherFont();
+    setFontChoice(DEFAULT_LAUNCHER_FONT);
+    resetLauncherFontScale();
+    setFontScale(DEFAULT_LAUNCHER_FONT_SCALE);
+    resetLauncherCornerRadius();
+    setCornerRadius(DEFAULT_LAUNCHER_CORNER_RADIUS);
+    const defaultPreferences = resetLauncherPreferences();
+    setPreferences(defaultPreferences);
+    void applyDiscordRpcPreference(defaultPreferences.discordRpc).catch(() => undefined);
+    await resetSettings();
+  };
+
+  return (
+    <section className="snine-settings-page" aria-label={t("settings.title")}>
+      <div className="snine-settings-page__inner">
+        <header className="snine-settings-page__heading">
+          <div>
+            <small>SNINE LAUNCHER / EINSTELLUNGEN</small>
+            <h1>Launcher anpassen</h1>
+            <p>Verhalten, Spieler-Vorschau, Integrationen und Design getrennt verwalten.</p>
+          </div>
+          <button type="button" onClick={() => void resetAll()} disabled={loading}>
+            <RotateCcw aria-hidden="true" />
+            ALLES ZURÜCKSETZEN
+          </button>
+        </header>
+
+        <div className="snine-settings-sections">
+          <section className="snine-settings-section">
+            <header><Gamepad2 aria-hidden="true" /><div><h2>Launcher &amp; Spiel</h2><p>Was beim Starten und Aktualisieren passieren soll.</p></div></header>
+            <div className="snine-settings-grid">
+              <SettingsRow icon={XCircle} title="Launcher schließen, wenn Minecraft startet" description="Beendet den Launcher automatisch, sobald das Spiel wirklich läuft.">
+                <Toggle checked={preferences.closeOnLaunch} label="Launcher nach Spielstart schließen" onChange={(value) => updatePreference("closeOnLaunch", value)} />
+              </SettingsRow>
+            </div>
+          </section>
+
+          <section className="snine-settings-section">
+            <header><Eye aria-hidden="true" /><div><h2>Spieler-Vorschau</h2><p>Lege fest, was am 3D-Modell im Launcher angezeigt wird.</p></div></header>
+            <div className="snine-settings-grid">
+              <SettingsRow icon={Sparkles} title="Cosmetics an der Vorschau anzeigen" description="Blendet Cape, Wings, Bandana und andere Cosmetics am Modell ein oder aus.">
+                <Toggle checked={preferences.showPreviewCosmetics} label="Cosmetics an Vorschau anzeigen" onChange={(value) => updatePreference("showPreviewCosmetics", value)} />
+              </SettingsRow>
+              <SettingsRow icon={Gamepad2} title="Vorschau-Animationen" description="Aktiviert die ruhige Idle-Bewegung des Skin-Modells.">
+                <Toggle checked={preferences.previewAnimations} label="Vorschau-Animationen" onChange={(value) => updatePreference("previewAnimations", value)} />
+              </SettingsRow>
+            </div>
+          </section>
+
+          <section className="snine-settings-section">
+            <header><MessageCircle aria-hidden="true" /><div><h2>Integrationen</h2><p>Verbindungen zu externen Apps kontrollieren.</p></div></header>
+            <div className="snine-settings-grid">
+              <SettingsRow icon={MessageCircle} title="Discord Rich Presence" description="Zeigt in Discord an, dass du den SNine Launcher verwendest.">
+                <Toggle checked={preferences.discordRpc} label="Discord Rich Presence" onChange={(value) => updatePreference("discordRpc", value)} />
+              </SettingsRow>
+            </div>
+          </section>
+
+          <section className="snine-settings-section">
+            <header><Palette aria-hidden="true" /><div><h2>Darstellung</h2><p>Sprache, Schrift, Hintergrund und Abstände des Launchers.</p></div></header>
+            <div className="snine-settings-grid">
+              <SettingsRow icon={Languages} title={t("settings.language")} description={t("settings.languageDescription")}>
+                <select value={settings.locale} onChange={(event) => update("locale", event.target.value as LocaleSetting)} aria-label={t("settings.language")}>
+                  <option value="system">{t("settings.language.system")}</option>
+                  <option value="de">{t("settings.language.de")}</option>
+                  <option value="en">{t("settings.language.en")}</option>
+                </select>
+              </SettingsRow>
+
+              <SettingsRow icon={Type} title={t("launcher.settings.font")} description={t("launcher.settings.fontDescription")}>
+                <select value={fontChoice} onChange={(event) => { const saved = saveLauncherFont(event.target.value as LauncherFontChoice); setFontChoice(saved); }} aria-label={t("launcher.settings.font")}>
+                  <option value="minecraft">{t("launcher.settings.fontMinecraft")}</option>
+                  <option value="launcher">{t("launcher.settings.fontLauncher")}</option>
+                </select>
+              </SettingsRow>
+
+              <SettingsRow slider icon={Type} title={t("launcher.settings.fontSize")} description={t("launcher.settings.fontSizeDescription")}>
+                <label className="snine-slider-control">
+                  <input type="range" min={MIN_LAUNCHER_FONT_SCALE} max={MAX_LAUNCHER_FONT_SCALE} step={0.05} value={fontScale} onChange={(event) => { const saved = saveLauncherFontScale(Number(event.target.value)); setFontScale(saved); }} aria-label={t("launcher.settings.fontSize")} />
+                  <span>{formatPercent(fontScale)}</span>
+                </label>
+              </SettingsRow>
+
+              <SettingsRow icon={Palette} title={t("launcher.settings.backgroundColor")} description={t("launcher.settings.backgroundColorDescription")}>
+                <label className="snine-background-picker" title={backgroundColor}>
+                  <input type="color" value={backgroundColor} onChange={(event) => { const saved = saveLauncherBackground(event.target.value); setBackgroundColor(saved); }} aria-label={t("launcher.settings.backgroundColor")} />
+                  <span>{backgroundColor.toUpperCase()}</span>
+                </label>
+              </SettingsRow>
+
+              <SettingsRow slider icon={Palette} title={t("launcher.settings.cornerRadius")} description={t("launcher.settings.cornerRadiusDescription")}>
+                <label className="snine-slider-control">
+                  <input type="range" min={MIN_LAUNCHER_CORNER_RADIUS} max={MAX_LAUNCHER_CORNER_RADIUS} step={1} value={cornerRadius} onChange={(event) => { const saved = saveLauncherCornerRadius(Number(event.target.value)); setCornerRadius(saved); }} aria-label={t("launcher.settings.cornerRadius")} />
+                  <span>{formatPixels(cornerRadius)}</span>
+                </label>
+              </SettingsRow>
+
+              <SettingsRow icon={Sparkles} title={t("settings.motion")} description={t("settings.motionDescription")}>
+                <Toggle checked={settings.reducedMotion} label={t("settings.motion")} onChange={(value) => update("reducedMotion", value)} />
+              </SettingsRow>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+  );
+}
