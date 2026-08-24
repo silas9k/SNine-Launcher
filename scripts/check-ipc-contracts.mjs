@@ -1,10 +1,9 @@
 import fs from "node:fs";
 
-const wrapperFiles = [
-  ...fs.readdirSync("src/lib")
-    .filter((file) => file.endsWith("Commands.ts") || file === "snineClientUpdate.ts")
-    .map((file) => `src/lib/${file}`),
-];
+const wrapperFiles = fs.readdirSync("src/lib")
+  .filter((file) => file.endsWith(".ts"))
+  .map((file) => `src/lib/${file}`)
+  .filter((file) => fs.readFileSync(file, "utf8").includes("invoke"));
 const ts = [...new Set(wrapperFiles)].map((file) => fs.readFileSync(file, "utf8")).join("\n");
 const generated = fs.readFileSync("src/lib/generated/ipc-contracts.ts", "utf8");
 const rust = fs.readFileSync("src-tauri/src/lib.rs", "utf8");
@@ -19,11 +18,10 @@ const invoked = new Set(
     .map((match) => match[1] ?? constants.get(match[2]))
     .filter(Boolean),
 );
-const handled = new Set([
-  ...[...rust.matchAll(/commands::([a-z0-9_]+)/g)].map((match) => match[1]),
-  ...[...rust.matchAll(/ipc::([a-z0-9_]+)/g)].map((match) => match[1]),
-  ...[...rust.matchAll(/snine_client_delivery::([a-z0-9_]+)/g)].map((match) => match[1]),
-]);
+const handlerBlock = rust.match(/invoke_handler\(tauri::generate_handler!\[([\s\S]*?)\]\)/)?.[1] ?? "";
+const handled = new Set(
+  [...handlerBlock.matchAll(/(?:[a-z0-9_]+::)*([a-z0-9_]+)\s*,/g)].map((match) => match[1]),
+);
 const errors = [];
 
 for (const command of invoked) {

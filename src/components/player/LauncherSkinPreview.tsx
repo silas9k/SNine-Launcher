@@ -10,6 +10,10 @@ interface LauncherSkinPreviewProps {
   reducedMotion: boolean;
   cosmetics?: LauncherCosmeticAsset[];
   onModelResolved?: (model: "slim" | "classic") => void;
+  cameraYaw?: number;
+  cameraPitch?: number;
+  cameraDistance?: number;
+  cameraTargetY?: number;
 }
 
 const FALLBACK_SKIN = "./skins/snine-default.png";
@@ -32,6 +36,10 @@ export function LauncherSkinPreview({
   reducedMotion,
   cosmetics = [],
   onModelResolved,
+  cameraYaw = 0,
+  cameraPitch = 1.5,
+  cameraDistance = 62,
+  cameraTargetY = 16,
 }: LauncherSkinPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<LauncherSkinRenderer | null>(null);
@@ -54,6 +62,7 @@ export function LauncherSkinPreview({
   useEffect(() => {
     if (!canvasRef.current) return;
     const renderer = new LauncherSkinRenderer(canvasRef.current, reducedMotion);
+    renderer.setCameraPreset(cameraYaw, cameraPitch, cameraDistance, cameraTargetY);
     rendererRef.current = renderer;
     return () => {
       rendererRef.current = null;
@@ -161,6 +170,10 @@ export function LauncherSkinPreview({
     void load();
     return () => { alive = false; };
   }, [cosmetics]);
+
+  useEffect(() => {
+    rendererRef.current?.setCameraPreset(cameraYaw, cameraPitch, cameraDistance, cameraTargetY);
+  }, [cameraYaw, cameraPitch, cameraDistance, cameraTargetY]);
 
   useEffect(() => {
     rendererRef.current?.setReducedMotion(reducedMotion);

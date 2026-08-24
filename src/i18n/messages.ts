@@ -1,6 +1,6 @@
 export const de = {
   "app.name": "SNine Launcher",
-  "app.version": "v1.0.8",
+  "app.version": "v1.0.9",
   "brand.name": "SNINE",
   "brand.product": "LAUNCHER",
   "brand.tagline": "PLAY · CREATE · CONTROL",
@@ -35,6 +35,7 @@ export const de = {
   "nav.servers": "Server",
   "nav.discover": "Modrinth",
   "nav.cosmetics": "Cosmetics",
+  "nav.skins": "Skins",
   "nav.instances": "Instanzen",
   "nav.stats": "Developer Stats",
   "nav.tasks": "Aufgaben und Downloads",
@@ -761,7 +762,7 @@ export type TranslationKey = keyof typeof de;
 
 export const en: Record<TranslationKey, string> = {
   "app.name": "SNine Launcher",
-  "app.version": "v1.0.8",
+  "app.version": "v1.0.9",
   "brand.name": "SNINE",
   "brand.product": "LAUNCHER",
   "brand.tagline": "PLAY · CREATE · CONTROL",
@@ -796,6 +797,7 @@ export const en: Record<TranslationKey, string> = {
   "nav.servers": "Servers",
   "nav.discover": "Modrinth",
   "nav.cosmetics": "Cosmetics",
+  "nav.skins": "Skins",
   "nav.instances": "Instances",
   "nav.stats": "Developer Stats",
   "nav.tasks": "Tasks and downloads",

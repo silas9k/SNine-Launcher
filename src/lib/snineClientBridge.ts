@@ -138,11 +138,20 @@ async function resolveEmbeddedAsset(asset: LauncherCosmeticAsset): Promise<Launc
   const canonicalId = LEGACY_ASSET_ALIASES[asset.id] ?? asset.id;
   const fallback = manifest[canonicalId];
   const synthetic = SYNTHETIC_ASSETS[asset.id];
+  const customCapeId = asset.kind?.trim().toLowerCase() === "cape"
+    ? asset.id.replace(/^custom_cape(?:_elytra)?:/i, "").trim()
+    : "";
+  let customCapeTexture = asset.textureDataUrl;
+  if (!customCapeTexture && customCapeId && hasTauri()) {
+    customCapeTexture = await invoke<string>("snine_launcher_custom_cape_texture", { capeId: customCapeId })
+      .catch(() => null);
+  }
 
-  if (!fallback && !synthetic) return asset;
+  if (!fallback && !synthetic && customCapeTexture === asset.textureDataUrl) return asset;
 
+  const preferEmbeddedModel = canonicalId === "snine_bandana";
   let model = asset.model;
-  if (!model && fallback?.model) {
+  if ((preferEmbeddedModel || !model) && fallback?.model) {
     model = await fetch(fallback.model, { cache: "force-cache" })
       .then((response) => response.ok ? response.json() : null)
       .catch(() => null);
@@ -159,7 +168,9 @@ async function resolveEmbeddedAsset(asset: LauncherCosmeticAsset): Promise<Launc
     ...asset,
     kind,
     name: asset.name && asset.name !== asset.id ? asset.name : fallbackName,
-    textureDataUrl: asset.textureDataUrl || fallback?.texture || synthetic?.textureDataUrl || null,
+    textureDataUrl: preferEmbeddedModel
+      ? (fallback?.texture || customCapeTexture || asset.textureDataUrl || null)
+      : (customCapeTexture || asset.textureDataUrl || fallback?.texture || synthetic?.textureDataUrl || null),
     model,
     definition: {
       ...(fallback?.definition ?? {}),

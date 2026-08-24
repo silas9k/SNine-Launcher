@@ -123,7 +123,7 @@ impl ProfileProcessManager {
         self.cleanup_finished().await?;
         let mut running = self.running.lock().await;
         ensure_profile_is_not_running(&running, request.profile_id)?;
-        let log_path = paths.instance.join("snine-launch.log");
+        let log_path = paths.instance.join(format!("snine-launch-{launch_id}.log"));
         let mut log_file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -1168,11 +1168,13 @@ fn configure_windows_process_group(command: &mut tokio::process::Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
     const CREATE_SUSPENDED: u32 = 0x0000_0004;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     // Suspension closes the assignment race: no Java or descendant code can run
-    // before the process is inside its launch-specific kill-on-close Job Object.
+    // before the process is inside its launch-specific Job Object. CREATE_NO_WINDOW
+    // keeps the Java console hidden while stdout/stderr continue to the SNine log file.
     command
         .as_std_mut()
-        .creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED);
+        .creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED | CREATE_NO_WINDOW);
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -1191,7 +1193,7 @@ impl ManagedProcessTree {
             System::JobObjects::{
                 AssignProcessToJobObject, CreateJobObjectW, IsProcessInJob,
                 JobObjectExtendedLimitInformation, SetInformationJobObject,
-                JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
             },
         };
 
@@ -1205,7 +1207,9 @@ impl ManagedProcessTree {
         }
         let job = unsafe { OwnedHandle::from_raw_handle(raw_job.cast()) };
         let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        // Do not use JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: Minecraft must keep running
+        // when the launcher or its log window is closed. The job remains useful for
+        // the explicit Stop action while the launcher is alive.
         let limits_size = u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
             .map_err(|_| AppError::coded("runtime_windows_job_configure_failed"))?;
         let configured = unsafe {

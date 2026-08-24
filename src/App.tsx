@@ -8,6 +8,8 @@ import { I18nProvider, useI18n } from "./i18n/I18nProvider";
 import { HomePage } from "./pages/HomePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SkinsPage } from "./pages/SkinsPage";
+import { CapesPage } from "./pages/CapesPage";
+import { MinecraftLogWindow } from "./pages/MinecraftLogWindow";
 import { applyShellTheme } from "./theme/applyTheme";
 import { applyLauncherBackground } from "./theme/launcherBackground";
 import { applyLauncherFont } from "./theme/launcherFont";
@@ -59,6 +61,8 @@ function ShellContent() {
             <SettingsPage />
           ) : page === "skins" ? (
             <SkinsPage />
+          ) : page === "capes" ? (
+            <CapesPage />
           ) : (
             <HomePage />
           )}
@@ -69,7 +73,12 @@ function ShellContent() {
   );
 }
 
-export default function App() {
+function MainLauncherApp() {
   const locale = useShellStore((state) => state.settings.locale);
   return <I18nProvider localeSetting={locale}><ShellContent /></I18nProvider>;
+}
+
+export default function App() {
+  const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  return params?.get("snineWindow") === "minecraftLogs" ? <MinecraftLogWindow /> : <MainLauncherApp />;
 }

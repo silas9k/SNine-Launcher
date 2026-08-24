@@ -7,6 +7,11 @@ export default defineConfig({
   plugins: [react()],
   base: "./",
   clearScreen: false,
+
+  build: {
+    chunkSizeWarningLimit: 1200,
+  },
+
   server: {
     port: 1420,
     strictPort: true,

@@ -10,6 +10,7 @@ import {
   LogIn,
   Play,
   Plus,
+  ScrollText,
   UserRound,
   X,
 } from "lucide-react";
@@ -21,13 +22,12 @@ import type {
   Phase3Account,
   Phase3DeviceLoginPrompt,
   Phase4Profile,
-  Phase5RuntimeStatus,
+  Phase5LaunchStatus,
 } from "../lib/generated/ipc-contracts";
 import { useWorkspaceStore } from "../app/workspaceStore";
 import { useShellStore } from "../app/shellStore";
 import { useI18n } from "../i18n/I18nProvider";
 import { LauncherSkinPreview } from "../components/player/LauncherSkinPreview";
-import { InstallWizardCard } from "../components/runtime/InstallWizardCard";
 import {
   loadSNineLauncherCosmetics,
   pollSNineLauncherLiveState,
@@ -120,7 +120,6 @@ export function HomePage() {
   const [launchState, setLaunchState] = useState<LaunchState>("idle");
   const [launchError, setLaunchError] = useState("");
   const [cosmetics, setCosmetics] = useState<LauncherCosmeticSnapshot>(EMPTY_COSMETICS);
-  const [cosmeticsSyncing, setCosmeticsSyncing] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [accountSwitching, setAccountSwitching] = useState(false);
   const [loginPrompt, setLoginPrompt] = useState<Phase3DeviceLoginPrompt | null>(null);
@@ -128,12 +127,7 @@ export function HomePage() {
   const [loginError, setLoginError] = useState("");
   const [downloadDialog, setDownloadDialog] = useState<DownloadDialogState>(HIDDEN_DOWNLOAD);
   const [clientVersion, setClientVersion] = useState<string | null>(null);
-  const [runtimeStatus, setRuntimeStatus] = useState<Phase5RuntimeStatus | null>(null);
-  const [setupChecking, setSetupChecking] = useState(false);
-  const [runtimeCheckFailed, setRuntimeCheckFailed] = useState(false);
-  const [clientInstalled, setClientInstalled] = useState(false);
-  const [clientCheckFailed, setClientCheckFailed] = useState(false);
-  const [setupRefreshRevision, setSetupRefreshRevision] = useState(0);
+  const [activeLaunch, setActiveLaunch] = useState<Phase5LaunchStatus | null>(null);
   const [playerRenderRevision, setPlayerRenderRevision] = useState(0);
   const [launcherPreferences] = useState(loadLauncherPreferences);
 
@@ -147,6 +141,7 @@ export function HomePage() {
   const currentPlayerAccountIdRef = useRef<string | null>(null);
   const pollBusyRef = useRef(false);
   const closeAfterLaunchIssuedRef = useRef(false);
+  const launchInFlightRef = useRef(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
   const loadBase = useCallback(async () => {
@@ -324,7 +319,6 @@ export function HomePage() {
     const expectedAccountId = playerAccount.id;
     const expectedProfileId = selectedProfile?.id ?? null;
     const syncEpoch = cosmeticSyncEpochRef.current;
-    setCosmeticsSyncing(true);
     try {
       const snapshot = await loadSNineLauncherCosmetics(
         expectedAccountId,
@@ -338,8 +332,6 @@ export function HomePage() {
       if (syncEpoch === cosmeticSyncEpochRef.current && currentPlayerAccountIdRef.current === expectedAccountId) {
         console.warn("[SNine Launcher] Initial cosmetic sync failed", error);
       }
-    } finally {
-      if (syncEpoch === cosmeticSyncEpochRef.current && currentPlayerAccountIdRef.current === expectedAccountId) setCosmeticsSyncing(false);
     }
   }, [launcherPreferences.showPreviewCosmetics, playerAccount, selectedProfile?.id]);
 
@@ -356,6 +348,16 @@ export function HomePage() {
     const timer = window.setTimeout(() => { void handshakeCosmetics(); }, 0);
     return () => window.clearTimeout(timer);
   }, [playerAccount?.id, playerAccount?.username, selectedProfile?.id]);
+
+  useEffect(() => {
+    const refreshCape = () => { void handshakeCosmetics(); };
+    window.addEventListener("snine-cape-selection-changed", refreshCape);
+    window.addEventListener("storage", refreshCape);
+    return () => {
+      window.removeEventListener("snine-cape-selection-changed", refreshCape);
+      window.removeEventListener("storage", refreshCape);
+    };
+  }, [handshakeCosmetics]);
 
   // The game client owns the per-player WebSocket. The launcher mirrors its authenticated
   // equipped state once per second, so changing a cosmetic in-game updates this renderer
@@ -441,48 +443,21 @@ export function HomePage() {
   useEffect(() => {
     const profileId = selectedProfile?.id;
     if (!profileId) {
-      setRuntimeStatus(null);
-      setRuntimeCheckFailed(false);
-      setClientInstalled(false);
-      setClientCheckFailed(false);
       setClientVersion(null);
-      setSetupChecking(false);
       return;
     }
 
     let disposed = false;
-    setSetupChecking(true);
-    setRuntimeCheckFailed(false);
-    setClientCheckFailed(false);
-
-    void Promise.allSettled([
-      runtimeCommands.status(profileId),
-      snineClientUpdate.check(profileId),
-    ]).then(([runtimeResult, clientResult]) => {
-      if (disposed) return;
-      if (runtimeResult.status === "fulfilled") {
-        setRuntimeStatus(runtimeResult.value);
-      } else {
-        console.warn("[SNine Launcher] Runtime setup check failed", runtimeResult.reason);
-        setRuntimeStatus(null);
-        setRuntimeCheckFailed(true);
-      }
-      if (clientResult.status === "fulfilled") {
-        setClientInstalled(clientResult.value.externalClientInstalled);
-        setClientVersion(clientResult.value.installedVersion);
-      } else {
-        console.warn("[SNine Launcher] SNine Client setup check failed", clientResult.reason);
-        setClientInstalled(false);
+    void snineClientUpdate.check(profileId).then((result) => {
+      if (!disposed) setClientVersion(result.installedVersion);
+    }).catch((error) => {
+      if (!disposed) {
         setClientVersion(null);
-        setClientCheckFailed(true);
+        console.warn("[SNine Launcher] SNine Client version check failed", error);
       }
-      setSetupChecking(false);
     });
-
-    return () => {
-      disposed = true;
-    };
-  }, [selectedProfile?.id, setupRefreshRevision]);
+    return () => { disposed = true; };
+  }, [selectedProfile?.id]);
 
   useEffect(() => {
     if (!selectedProfile) return;
@@ -497,9 +472,14 @@ export function HomePage() {
         const active = profileStatuses.find((item) => (
           item.state === "starting" || item.state === "running" || item.state === "stopping"
         ));
-        if (active?.state === "running") setLaunchState("running");
-        else if (active?.state === "starting") setLaunchState("launching");
-        else {
+        if (active?.state === "running" || active?.state === "stopping") {
+          setActiveLaunch(active);
+          setLaunchState("running");
+        } else if (active?.state === "starting") {
+          setActiveLaunch(active);
+          setLaunchState("launching");
+        } else {
+          setActiveLaunch(null);
           const latest = profileStatuses[0];
           if (latest?.state === "failed" || (latest?.state === "exited" && latest.exitCode !== 0)) {
             const exit = latest.exitCode == null ? "unknown" : String(latest.exitCode);
@@ -523,7 +503,8 @@ export function HomePage() {
 
 
   const launch = useCallback(async () => {
-    if (!playerAccount || launchState === "launching" || launchState === "running") return;
+    if (!playerAccount || launchInFlightRef.current || launchState === "launching" || launchState === "running") return;
+    launchInFlightRef.current = true;
     setLaunchError("");
     setLaunchState("launching");
     closeAfterLaunchIssuedRef.current = false;
@@ -551,8 +532,10 @@ export function HomePage() {
       }
 
       const result = await runtimeCommands.launch(profile.id, 4096);
+      setActiveLaunch(result);
       setLaunchState(result.state === "running" ? "running" : result.state === "starting" ? "launching" : "idle");
       setDownloadDialog((current) => current.stage === "error" ? current : HIDDEN_DOWNLOAD);
+      void snineClientUpdate.check(profile.id).then((status) => setClientVersion(status.installedVersion)).catch(() => undefined);
     } catch (error) {
       console.error("[SNine Launcher] Launch failed", error);
       const message = readableLaunchError(error, t);
@@ -560,50 +543,21 @@ export function HomePage() {
       setDownloadDialog((current) => current.visible ? { ...current, stage: "error", error: message } : current);
       setLaunchState("error");
     } finally {
-      setSetupRefreshRevision((revision) => revision + 1);
+      launchInFlightRef.current = false;
     }
   }, [launchState, playerAccount, reconcileProfiles, selectProfile, selectedProfile, t]);
 
   const canLaunch = Boolean(playerAccount) && !loading && !accountSwitching;
-  const runtimeInstalled = runtimeStatus?.installState === "installed";
-  const setupBusy = setupChecking || launchState === "launching";
-  const runtimeStepState = (ready: boolean) => (
-    ready
-      ? "done" as const
-      : setupBusy
-        ? "running" as const
-        : runtimeCheckFailed
-          ? "error" as const
-          : "missing" as const
-  );
-  const setupSteps = [
-    {
-      id: "java",
-      label: "Java Runtime",
-      state: runtimeStepState(Boolean(runtimeInstalled && runtimeStatus?.runtime?.java)),
-    },
-    {
-      id: "fabric",
-      label: "Fabric Loader",
-      state: runtimeStepState(Boolean(runtimeInstalled && runtimeStatus?.runtime?.loader.kind === "fabric")),
-    },
-    {
-      id: "libraries",
-      label: "Minecraft Libraries",
-      state: runtimeStepState(Boolean(runtimeInstalled)),
-    },
-    {
-      id: "client",
-      label: "SNine Client",
-      state: clientInstalled
-        ? "done" as const
-        : setupBusy
-          ? "running" as const
-          : clientCheckFailed
-            ? "error" as const
-            : "missing" as const,
-    },
-  ];
+
+  const openRunningLogs = useCallback(async () => {
+    if (!activeLaunch) return;
+    try {
+      await runtimeCommands.logOpen(activeLaunch.profileId, activeLaunch.launchId, activeLaunch.accountName);
+    } catch (error) {
+      console.warn("[SNine Launcher] Could not reopen Minecraft log window", error);
+    }
+  }, [activeLaunch]);
+
 
   return (
     <div className="snine-one-home">
@@ -614,7 +568,7 @@ export function HomePage() {
               type="button"
               className="snine-account-switcher__button"
               onClick={() => setAccountMenuOpen((open) => !open)}
-              disabled={accountSwitching}
+              disabled={accountSwitching || launchState === "launching" || launchState === "running"}
               aria-expanded={accountMenuOpen}
             >
               {accountSwitching ? <LoaderCircle className="ui-spin" aria-hidden="true" /> : <UserRound aria-hidden="true" />}
@@ -630,6 +584,7 @@ export function HomePage() {
                     key={account.id}
                     className={account.id === playerAccount?.id ? "is-selected" : ""}
                     onClick={() => void switchAccount(account)}
+                    disabled={accountSwitching || launchState === "launching" || launchState === "running"}
                     role="menuitem"
                   >
                     <UserRound aria-hidden="true" />
@@ -644,7 +599,7 @@ export function HomePage() {
                   type="button"
                   className="snine-account-switcher__add"
                   onClick={() => void startAccountLogin()}
-                  disabled={loginBusy === "start"}
+                  disabled={loginBusy === "start" || launchState === "launching" || launchState === "running"}
                   role="menuitem"
                 >
                   {loginBusy === "start" ? <LoaderCircle className="ui-spin" aria-hidden="true" /> : <Plus aria-hidden="true" />}
@@ -669,7 +624,6 @@ export function HomePage() {
         />
       </section>
 
-      <InstallWizardCard steps={setupSteps} />
 
       <footer className="snine-one-home__launch-area">
         <button
@@ -687,6 +641,13 @@ export function HomePage() {
           </span>
           <span className="snine-one-home__launch-arrow">→</span>
         </button>
+
+        {activeLaunch && (launchState === "launching" || launchState === "running") ? (
+          <button type="button" className="snine-one-home__logs" onClick={() => void openRunningLogs()}>
+            <ScrollText aria-hidden="true" />
+            LIVE LOGS ÖFFNEN
+          </button>
+        ) : null}
 
         {(launchError || !playerAccount) ? (
           <div className="snine-one-home__footer-status">

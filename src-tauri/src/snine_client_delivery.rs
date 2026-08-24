@@ -247,29 +247,47 @@ fn update_urls() -> [&'static str; 2] {
 }
 
 async fn probe_remote(client: &reqwest::Client) -> Result<RemoteMetadata, String> {
-    let mut last_error = String::from("snine_update_remote_unreachable");
+    let mut errors = Vec::new();
 
     for url in update_urls() {
         match client.head(url).send().await {
-            Ok(head) if head.status().is_success() => return Ok(remote_metadata(&head)),
-            Ok(head) => last_error = format!("snine_update_probe_http_{}", head.status().as_u16()),
-            Err(error) => last_error = format!("snine_update_probe_failed:{error}"),
+            Ok(head) if head.status().is_success() => {
+                return Ok(remote_metadata(&head));
+            }
+            Ok(head) => {
+                errors.push(format!(
+                    "head_http_{}",
+                    head.status().as_u16()
+                ));
+            }
+            Err(error) => {
+                errors.push(format!("head_failed:{error}"));
+            }
         }
 
-        // Some static hosts/CDNs reject HEAD. A one-byte range request gives us the
-        // same metadata without downloading the whole client.
         match client.get(url).header(RANGE, "bytes=0-0").send().await {
-            Ok(response) if response.status().is_success() || response.status().as_u16() == 206 => {
+            Ok(response)
+                if response.status().is_success()
+                    || response.status().as_u16() == 206 =>
+            {
                 return Ok(remote_metadata(&response));
             }
             Ok(response) => {
-                last_error = format!("snine_update_probe_get_http_{}", response.status().as_u16())
+                errors.push(format!(
+                    "get_http_{}",
+                    response.status().as_u16()
+                ));
             }
-            Err(error) => last_error = format!("snine_update_probe_get_failed:{error}"),
+            Err(error) => {
+                errors.push(format!("get_failed:{error}"));
+            }
         }
     }
 
-    Err(last_error)
+    Err(format!(
+        "snine_update_remote_unreachable:{}",
+        errors.join("|")
+    ))
 }
 
 async fn open_download_response(client: &reqwest::Client) -> Result<reqwest::Response, String> {
@@ -1015,6 +1033,7 @@ async fn download_update_impl(
     let _ = fs::remove_file(&backup);
 
     remove_duplicate_snine_jars(&mods_dir, &target);
+    remove_legacy_s9lab_client(&mods_dir)?;
 
     let metadata = PersistedClientMetadata {
         url: SNINE_CLIENT_URL.into(),

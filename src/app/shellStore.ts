@@ -4,7 +4,7 @@ import { applyShellTheme } from "../theme/applyTheme";
 import { DEFAULT_SHELL_SETTINGS, type ShellSettings } from "../theme/types";
 import type { TranslationKey } from "../i18n/messages";
 
-export type ShellPage = "home" | "profiles" | "cosmetics" | "mods" | "modpacks" | "shaders" | "resourcepacks" | "servers" | "stats" | "accounts" | "skins" | "settings";
+export type ShellPage = "home" | "profiles" | "cosmetics" | "mods" | "modpacks" | "shaders" | "resourcepacks" | "servers" | "stats" | "accounts" | "skins" | "capes" | "settings";
 export type ToastTone = "success" | "warning" | "error" | "info";
 
 export interface ToastMessage {

@@ -22,6 +22,7 @@ use crate::{
     },
 };
 use serde::Serialize;
+use std::{fs::File, io::{Read, Seek, SeekFrom}, path::PathBuf};
 use tauri::Manager;
 
 pub const IPC_CONTRACT_VERSION: u32 = 9;
@@ -54,6 +55,8 @@ pub const PHASE5_LAUNCH_PROFILE_COMMAND: &str = "phase5_launch_profile";
 pub const PHASE5_STOP_LAUNCH_COMMAND: &str = "phase5_stop_launch";
 pub const PHASE5_LAUNCH_STATUSES_COMMAND: &str = "phase5_launch_statuses";
 pub const PHASE5_SET_S9LAB_COMPONENT_COMMAND: &str = "phase5_set_s9lab_component";
+pub const PHASE5_MINECRAFT_LOG_READ_COMMAND: &str = "phase5_minecraft_log_read";
+pub const PHASE5_MINECRAFT_LOG_EXPORT_COMMAND: &str = "phase5_minecraft_log_export";
 pub const PHASE6_CONTENT_SNAPSHOT_COMMAND: &str = "phase6_content_snapshot";
 pub const PHASE6_CHECK_CONTENT_UPDATES_COMMAND: &str = "phase6_check_content_updates";
 pub const PHASE6_MODRINTH_SEARCH_COMMAND: &str = "phase6_modrinth_search";
@@ -111,6 +114,82 @@ fn authorize_main_window(window: &tauri::Window) -> AppResult<()> {
             [("windowLabel", window.label().to_string())],
         ))
     }
+}
+
+fn authorize_runtime_window(window: &tauri::Window) -> AppResult<()> {
+    if window.label() == "main" || window.label().starts_with("minecraft-logs-") {
+        Ok(())
+    } else {
+        Err(AppError::coded_with(
+            "ipc_window_not_allowed",
+            [("windowLabel", window.label().to_string())],
+        ))
+    }
+}
+
+fn validate_log_identifier(value: &str) -> AppResult<()> {
+    if value.is_empty()
+        || value.len() > 160
+        || !value.is_ascii()
+        || !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    {
+        return Err(AppError::coded("runtime_launch_log_identifier_invalid"));
+    }
+    Ok(())
+}
+
+fn launch_log_path(core: &crate::foundation::CoreServices, profile_id: &str, launch_id: &str) -> AppResult<PathBuf> {
+    validate_log_identifier(profile_id)?;
+    validate_log_identifier(launch_id)?;
+    let resolved = core.registry().resolve(
+        "profiles",
+        format!("{profile_id}/instance/snine-launch-{launch_id}.log"),
+    )?;
+    Ok(resolved.absolute().to_path_buf())
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MinecraftLogChunk {
+    pub text: String,
+    pub next_offset: u64,
+    pub file_size: u64,
+}
+
+fn open_minecraft_log_window(
+    app: &tauri::AppHandle,
+    profile_id: &str,
+    launch_id: &str,
+    account_name: &str,
+) -> AppResult<()> {
+    validate_log_identifier(profile_id)?;
+    validate_log_identifier(launch_id)?;
+    let label = format!("minecraft-logs-{launch_id}");
+    if let Some(existing) = app.get_webview_window(&label) {
+        let _ = existing.show();
+        let _ = existing.set_focus();
+        return Ok(());
+    }
+    let encoded_account = account_name.bytes().map(|byte| {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            (byte as char).to_string()
+        } else {
+            format!("%{byte:02X}")
+        }
+    }).collect::<String>();
+    let url = format!(
+        "index.html?snineWindow=minecraftLogs&profileId={profile_id}&launchId={launch_id}&accountName={encoded_account}"
+    );
+    tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::App(url.into()))
+        .title("SNine · Minecraft Logs")
+        .inner_size(980.0, 620.0)
+        .min_inner_size(720.0, 440.0)
+        .resizable(true)
+        .decorations(false)
+        .center()
+        .build()
+        .map_err(|_| AppError::coded("runtime_log_window_create_failed"))?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -430,6 +509,7 @@ fn snine_launch_error(message: String) -> IpcError {
 #[tauri::command]
 pub async fn phase5_launch_profile(
     window: tauri::Window,
+    app: tauri::AppHandle,
     runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
     auth: tauri::State<'_, AuthService>,
     core: tauri::State<'_, crate::foundation::CoreServices>,
@@ -540,10 +620,14 @@ pub async fn phase5_launch_profile(
         loader_version
     );
 
-    runtime
+    let launch = runtime
         .launch(auth.inner(), &profile_id, memory_mb)
         .await
-        .map_err(Into::into)
+        .map_err(IpcError::from)?;
+    if let Err(error) = open_minecraft_log_window(&app, &profile_id, &launch.launch_id, &launch.account_name) {
+        eprintln!("[SNine Launcher] Minecraft log window could not be opened: {error}");
+    }
+    Ok(launch)
 }
 
 #[tauri::command]
@@ -561,8 +645,94 @@ pub async fn phase5_launch_statuses(
     window: tauri::Window,
     runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
 ) -> Result<Vec<crate::minecraft::profile_launch::ProfileLaunchStatus>, IpcError> {
-    authorize_main_window(&window)?;
+    authorize_runtime_window(&window)?;
     runtime.launch_statuses().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn phase5_minecraft_log_window_open(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    profile_id: String,
+    launch_id: String,
+    account_name: String,
+) -> Result<(), IpcError> {
+    authorize_main_window(&window)?;
+    open_minecraft_log_window(&app, &profile_id, &launch_id, &account_name).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn minecraft_log_window_open(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    profile_id: String,
+    launch_id: String,
+    account_name: String,
+) -> Result<(), IpcError> {
+    // Stable compatibility alias for launcher frontends that were hot-reloaded while
+    // the phase5 command registration still came from an older Tauri binary.
+    authorize_main_window(&window)?;
+    open_minecraft_log_window(&app, &profile_id, &launch_id, &account_name).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn phase5_minecraft_log_read(
+    window: tauri::Window,
+    core: tauri::State<'_, crate::foundation::CoreServices>,
+    profile_id: String,
+    launch_id: String,
+    offset: u64,
+) -> Result<MinecraftLogChunk, IpcError> {
+    authorize_runtime_window(&window)?;
+    let path = launch_log_path(core.inner(), &profile_id, &launch_id)?;
+    let mut file = match File::open(&path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(MinecraftLogChunk { text: String::new(), next_offset: 0, file_size: 0 });
+        }
+        Err(error) => return Err(IpcError::from(AppError::from(error))),
+    };
+    let size = file.metadata().map_err(AppError::from)?.len();
+    let start = offset.min(size);
+    file.seek(SeekFrom::Start(start)).map_err(AppError::from)?;
+    let mut limited = file.take(256 * 1024);
+    let mut bytes = Vec::new();
+    limited.read_to_end(&mut bytes).map_err(AppError::from)?;
+    Ok(MinecraftLogChunk {
+        text: String::from_utf8_lossy(&bytes).into_owned(),
+        next_offset: start + bytes.len() as u64,
+        file_size: size,
+    })
+}
+
+#[tauri::command]
+pub fn phase5_minecraft_log_export(
+    window: tauri::Window,
+    core: tauri::State<'_, crate::foundation::CoreServices>,
+    profile_id: String,
+    launch_id: String,
+) -> Result<String, IpcError> {
+    authorize_runtime_window(&window)?;
+    let source = launch_log_path(core.inner(), &profile_id, &launch_id)?;
+    if !source.is_file() {
+        return Err(IpcError::from(AppError::coded("runtime_launch_log_missing")));
+    }
+    let downloads = dirs::download_dir()
+        .or_else(|| dirs::home_dir().map(|home| home.join("Downloads")))
+        .ok_or_else(|| IpcError::from(AppError::coded("runtime_downloads_directory_missing")))?;
+    std::fs::create_dir_all(&downloads).map_err(AppError::from)?;
+    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
+    let base_name = format!("SNine-Minecraft-{launch_id}-{timestamp}");
+    let mut destination = downloads.join(format!("{base_name}.log"));
+    for suffix in 2..=999u16 {
+        if !destination.exists() { break; }
+        destination = downloads.join(format!("{base_name} ({suffix}).log"));
+    }
+    if destination.exists() {
+        return Err(IpcError::from(AppError::coded("runtime_launch_log_export_collision")));
+    }
+    std::fs::copy(&source, &destination).map_err(AppError::from)?;
+    Ok(destination.to_string_lossy().into_owned())
 }
 
 #[tauri::command]

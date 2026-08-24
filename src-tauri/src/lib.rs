@@ -1,6 +1,7 @@
 pub mod app;
 mod auth;
 pub mod cache;
+mod capes;
 pub mod cloud_sync;
 pub mod components;
 pub mod content;
@@ -73,6 +74,15 @@ pub fn run() {
             snine_bridge::snine_launcher_resolve_cosmetics,
             snine_bridge::snine_launcher_player_skin,
             snine_bridge::snine_launcher_import_skin,
+            capes::snine_launcher_custom_capes,
+            capes::snine_launcher_custom_cape_upload,
+            capes::snine_launcher_custom_cape_favorite,
+            capes::snine_launcher_custom_cape_equip,
+            capes::snine_launcher_custom_cape_unequip,
+            capes::snine_launcher_custom_cape_texture,
+            capes::snine_launcher_custom_cape_preview,
+            capes::snine_launcher_save_cape_template,
+            capes::snine_launcher_vanilla_capes,
             snine_client_delivery::snine_client_update_check,
             snine_client_delivery::snine_client_download_update,
             ipc::phase1_core_status,
@@ -103,6 +113,10 @@ pub fn run() {
             ipc::phase5_launch_profile,
             ipc::phase5_stop_launch,
             ipc::phase5_launch_statuses,
+            ipc::phase5_minecraft_log_window_open,
+            ipc::minecraft_log_window_open,
+            ipc::phase5_minecraft_log_read,
+            ipc::phase5_minecraft_log_export,
             ipc::phase5_set_s9lab_component,
             ipc::phase6_content_snapshot,
             ipc::phase6_check_content_updates,

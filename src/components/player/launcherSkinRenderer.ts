@@ -65,7 +65,7 @@ export interface LoadedRendererCosmetic {
 }
 
 export class LauncherSkinRenderer {
-  canvas: HTMLCanvasElement; gl: WebGLRenderingContext; program: any; textures = new Set<WebGLTexture>(); skinTex: any = null; bones = new Map<string, Bone>(); topBones: Bone[] = []; cameraYaw=0; cameraPitch=1.5; cameraDistance=62; target=[0,16,0]; drag: [number,number] | null=null; running=true; model: "slim"|"classic"="slim"; frameHandle=0; reducedMotion=false;
+  canvas: HTMLCanvasElement; gl: WebGLRenderingContext; program: any; textures = new Set<WebGLTexture>(); skinTex: any = null; bones = new Map<string, Bone>(); topBones: Bone[] = []; cameraYaw=0; cameraPitch=1.5; cameraDistance=62; target=[0,16,0]; homeCameraYaw=0; homeCameraPitch=1.5; homeCameraDistance=62; homeTarget=[0,16,0]; drag: [number,number] | null=null; running=true; model: "slim"|"classic"="slim"; frameHandle=0; reducedMotion=false;
   cosmeticSources: LoadedRendererCosmetic[] = []; cosmeticTextures = new Set<WebGLTexture>(); cosmeticRoots: Array<{ bone: Bone; kind: string; phase: number }> = []; glintEnabled=false; glintStyle=1; renderTime=0;
 
   constructor(canvas: HTMLCanvasElement, reducedMotion=false) {
@@ -277,11 +277,12 @@ void main(){
     this.buildPlayer(this.model);
   }
   setReducedMotion(value: boolean) { this.reducedMotion = value; }
+  setCameraPreset(yaw=0,pitch=1.5,distance=62,targetY=16){this.homeCameraYaw=yaw;this.homeCameraPitch=pitch;this.homeCameraDistance=distance;this.homeTarget=[0,targetY,0];this.cameraYaw=yaw;this.cameraPitch=pitch;this.cameraDistance=distance;this.target=[0,targetY,0];}
   attachOrbit() {
     const c=this.canvas;
     c.addEventListener("pointerdown",e=>{this.drag=[e.clientX,e.clientY];c.setPointerCapture?.(e.pointerId)});
     c.addEventListener("pointermove",e=>{if(!this.drag)return;this.cameraYaw+=(e.clientX-this.drag[0])*.35;this.cameraPitch=clamp(this.cameraPitch+(e.clientY-this.drag[1])*.25,-35,30);this.drag=[e.clientX,e.clientY]});
-    c.addEventListener("pointerup",()=>this.drag=null); c.addEventListener("pointercancel",()=>this.drag=null); c.addEventListener("dblclick",()=>{this.cameraYaw=0;this.cameraPitch=1.5;this.cameraDistance=62}); c.addEventListener("wheel",e=>{e.preventDefault();this.cameraDistance=clamp(this.cameraDistance+Math.sign(e.deltaY)*3,48,82)},{passive:false});
+    c.addEventListener("pointerup",()=>this.drag=null); c.addEventListener("pointercancel",()=>this.drag=null); c.addEventListener("dblclick",()=>{this.cameraYaw=this.homeCameraYaw;this.cameraPitch=this.homeCameraPitch;this.cameraDistance=this.homeCameraDistance;this.target=[...this.homeTarget]}); c.addEventListener("wheel",e=>{e.preventDefault();this.cameraDistance=clamp(this.cameraDistance+Math.sign(e.deltaY)*3,48,96)},{passive:false});
   }
   clearCosmeticTextures(){for(const t of this.cosmeticTextures){this.gl.deleteTexture(t);this.textures.delete(t)}this.cosmeticTextures.clear();this.cosmeticRoots=[];this.glintEnabled=false;this.glintStyle=1;}
   clearModel(){this.bones.clear();this.topBones=[];}
@@ -311,10 +312,10 @@ void main(){
     // Minecraft cape proportions, fitted tightly to the outer skin layer.
     // The upper inside face sits almost directly behind the jacket so the side
     // profile reads as one clean attachment instead of a detached black strip.
-    const rows=8,halfW=5,thickness=.46;
+    const rows=8,halfW=5,thickness=.44;
     const uv=(u:number,v:number)=>[u/tex.w,1-v/tex.h];
     const pushQuad=(verts:number[][],uvs:number[][],n:number[])=>{const idx=[0,1,2,0,2,3];for(const i of idx){P.push(...verts[i]);U.push(...uvs[i]);N.push(...n)}};
-    const point=(side:number,row:number,zOffset:number)=>{const t=row/rows,y=-16*t,z=.035+.20*t*t+zOffset;return [side*halfW,y,z]};
+    const point=(side:number,row:number,zOffset:number)=>{const t=row/rows,y=-16*t,z=.12+.14*t*t+zOffset;return [side*halfW,y,z]};
     // Outside (+Z) and inside (-Z) keep the vanilla 64x32 cape layout. The
     // segmented mesh gives a subtle cloth fall without collapsing the side wall.
     for(let row=0;row<rows;row++){
@@ -343,56 +344,80 @@ void main(){
 
   playerAttachment(name:string|undefined,kind:string,boneName="",allowKindFallback=true){const value=(name||boneName||"").toLowerCase().replace(/[^a-z]/g,"");if(value.includes("rightarm")||value.includes("armright"))return this.bones.get("bipedRightArm");if(value.includes("leftarm")||value.includes("armleft"))return this.bones.get("bipedLeftArm");if(value.includes("rightleg")||value.includes("rightboot")||value.includes("legright"))return this.bones.get("bipedRightLeg");if(value.includes("leftleg")||value.includes("leftboot")||value.includes("legleft"))return this.bones.get("bipedLeftLeg");if(value.includes("head")||value.includes("hat"))return this.bones.get("bipedHead");if(value.includes("body")||value.includes("chest")||value.includes("torso"))return this.bones.get("bipedBody");if(value.includes("rig")||value==="root")return this.bones.get("bipedRig");if(!allowKindFallback)return undefined;const k=kind.toLowerCase();if(k==="hat"||k==="halo"||k==="bandana")return this.bones.get("bipedHead");if(k==="cape"||k==="wings"||k==="accessory"||k==="chestplate"||k==="armor")return this.bones.get("bipedBody");return this.bones.get("bipedRig");}
   geometryRoot(model:any){const roots=model?.["minecraft:geometry"] ?? model?.geometry ?? model;if(Array.isArray(roots)){for(const geometry of roots){if(Array.isArray(geometry?.bones))return geometry}}if(Array.isArray(roots?.bones))return roots;return null;}
-  geometryBones(model:any){return this.geometryRoot(model)?.bones ?? [];}
-  geometryTextureSize(model:any){const description=this.geometryRoot(model)?.description;const w=Number(description?.texture_width),h=Number(description?.texture_height);return Number.isFinite(w)&&w>0&&Number.isFinite(h)&&h>0?[w,h]:undefined;}
+  bbmodelBones(model:any){
+    if(!Array.isArray(model?.groups)||!Array.isArray(model?.elements)||!Array.isArray(model?.outliner))return [];
+    const groups=new Map(model.groups.map((group:any)=>[String(group?.uuid||""),group]));
+    const elements=new Map(model.elements.map((element:any)=>[String(element?.uuid||""),element]));
+    const bones:any[]=[];const byUuid=new Map<string,any>();
+    const convertFace=(face:any)=>{const uv=Array.isArray(face?.uv)?face.uv:null;if(!uv||uv.length<4)return undefined;return {uv:[Number(uv[0])||0,Number(uv[1])||0],uv_size:[(Number(uv[2])||0)-(Number(uv[0])||0),(Number(uv[3])||0)-(Number(uv[1])||0)]};};
+    // Blockbench's GeckoLib editor stores X/pivot/rotation in its editor coordinate
+    // system. The launcher mirrors X to match the Minecraft player rig, but keeps the
+    // authored X tilt so the bandana rises at the forehead and falls toward the knot.
+    // Y is mirrored with X so the left/right tail rotations stay symmetric.
+    const bbPointToBedrock=(value:any)=>{const p=vec3(value);return[-p[0],p[1],p[2]];};
+    const bbRotationToBedrock=(value:any)=>{const r=vec3(value);return[r[0],-r[1],r[2]];};
+    const cubeFrom=(element:any)=>{if(element?.export===false||!Array.isArray(element?.from)||!Array.isArray(element?.to))return null;const rawFrom=vec3(element.from),rawTo=vec3(element.to),from=[-rawTo[0],rawFrom[1],rawFrom[2]],to=[-rawFrom[0],rawTo[1],rawTo[2]],faces=element.faces||{};const uv:any={};for(const key of ["north","east","south","west","up","down"]){const converted=convertFace(faces[key]);if(converted)uv[key]=converted}const rawPivot=Array.isArray(element?.origin)?element.origin:[(rawFrom[0]+rawTo[0])/2,(rawFrom[1]+rawTo[1])/2,(rawFrom[2]+rawTo[2])/2];return {origin:from,size:[to[0]-from[0],to[1]-from[1],to[2]-from[2]],pivot:bbPointToBedrock(rawPivot),rotation:bbRotationToBedrock(element?.rotation),inflate:Number(element?.inflate)||0,uv};};
+    const walk=(node:any,parentName:string|undefined)=>{
+      if(typeof node==="string"){const element=elements.get(node);if(!element||!parentName)return;const parent=byUuid.get(parentName);const cube=cubeFrom(element);if(parent&&cube)parent.cubes.push(cube);return;}
+      if(!node||typeof node!=="object")return;const uuid=String(node.uuid||"");const group=groups.get(uuid);if(!group)return;const bone:any={name:String(group.name||uuid),pivot:bbPointToBedrock(group.origin),rotation:bbRotationToBedrock(group.rotation),cubes:[]};if(parentName){const parent=byUuid.get(parentName);if(parent)bone.parent=parent.name;}bones.push(bone);byUuid.set(uuid,bone);for(const child of Array.isArray(node.children)?node.children:[])walk(child,uuid);
+    };
+    for(const root of model.outliner)walk(root,undefined);
+    return bones;
+  }
+  geometryBones(model:any){const bedrock=this.geometryRoot(model)?.bones;if(Array.isArray(bedrock))return bedrock;return this.bbmodelBones(model);}
+  geometryTextureSize(model:any){const description=this.geometryRoot(model)?.description;const w=Number(description?.texture_width),h=Number(description?.texture_height);if(Number.isFinite(w)&&w>0&&Number.isFinite(h)&&h>0)return[w,h];const bw=Number(model?.resolution?.width),bh=Number(model?.resolution?.height);return Number.isFinite(bw)&&bw>0&&Number.isFinite(bh)&&bh>0?[bw,bh]:undefined;}
   buildBandanaClientGeometry(source:LoadedRendererCosmetic,tex:any,rawBones:any[]){
     const head=this.bones.get("bipedHead");if(!head)return false;
-    const prefix=`cosmetic:${source.asset.id}:bandana-client:`;
-    const armor=rawBones.find((bone:any)=>String(bone?.name||"").toLowerCase()==="armorhead");
-    const knotSource=rawBones.find((bone:any)=>String(bone?.name||"").toLowerCase()==="bandana_knot");
-    const leftSource=rawBones.find((bone:any)=>String(bone?.name||"").toLowerCase()==="left_tail");
-    const rightSource=rawBones.find((bone:any)=>String(bone?.name||"").toLowerCase()==="right_tail");
-    const armorCubes=Array.isArray(armor?.cubes)?armor.cubes:[];
-    const sourceUv=(cube:any,fallback:any=[0,0])=>cube?.uv ?? fallback;
-    const root=new Bone(`${prefix}root`,[0,24,0],head,[0,0,0]);this.bones.set(root.name,root);
-    const cube=(name:string,origin:number[],size:number[],uv:any,inflate=0)=>{const node=new Bone(`${prefix}${name}`,[0,24,0],root,[0,0,0]);this.bones.set(node.name,node);node.drawables.push(this.makeGeoBoxDrawable({origin,size,uv,inflate},tex,node.pivot,false));return node;};
-    // The launcher preview now follows the in-game bandana silhouette more closely:
-    // a tighter band around the head, a smaller rear knot and two short cloth tails
-    // hanging from the center back instead of one exaggerated side spike.
-    const bandY=30.38;
-    cube("front",[-4.34,bandY,-4.58],[8.68,.96,.56],sourceUv(armorCubes[0]),.035);
-    cube("back",[-4.22,bandY,4.02],[8.44,.96,.56],sourceUv(armorCubes[3]??armorCubes[0]),.035);
-    cube("left",[-4.58,bandY,-4.00],[.56,.96,8.00],sourceUv(armorCubes[2]??armorCubes[0]),.035);
-    cube("right",[4.02,bandY,-4.00],[.56,.96,8.00],sourceUv(armorCubes[1]??armorCubes[0]),.035);
-    cube("knot",[-.98,30.22,4.42],[1.96,.92,.86],sourceUv(knotSource?.cubes?.[0]??armorCubes[0]),.05);
-    const makeTail=(name:string,pivot:number[],origin:number[],size:number[],rotation:number[],uv:any)=>{const node=new Bone(`${prefix}${name}`,pivot,root,rotation);this.bones.set(node.name,node);node.drawables.push(this.makeGeoBoxDrawable({origin,size,uv,inflate:.018},tex,pivot,false));return node;};
-    // Keep the two ribbons close to the knot so the back view shows both strips,
-    // matching the in-game cosmetic more closely.
-    makeTail("left_tail",[-.38,30.12,4.92],[-.70,28.52,4.80],[.56,1.62,.28],[-5,0,-8],sourceUv(leftSource?.cubes?.[0]??knotSource?.cubes?.[0]));
-    makeTail("right_tail",[.38,30.12,4.92],[.14,28.58,4.80],[.56,1.56,.28],[-5,0,8],sourceUv(rightSource?.cubes?.[0]??knotSource?.cubes?.[0]));
-    return true;
+    const relevantNames=new Set(["bandana","knot","left_tail","left_tail2","right_tail","right_tail2"]);
+    const relevant=rawBones.filter((bone:any)=>relevantNames.has(String(bone?.name||"").toLowerCase()));
+    if(!relevant.length)return false;
+    const byName=new Map<string,any>(relevant.map((bone:any)=>[String(bone?.name||"").toLowerCase(),bone]));
+    const created=new Map<string,Bone>();
+    const prefix=`cosmetic:${source.asset.id}:bandana-authored:`;
+    const create=(name:string):Bone|undefined=>{
+      const key=name.toLowerCase();
+      if(created.has(key))return created.get(key);
+      const sourceBone=byName.get(key);if(!sourceBone)return undefined;
+      const parentName=String(sourceBone?.parent||"").toLowerCase();
+      const parent=(parentName&&relevantNames.has(parentName)?create(parentName):undefined)??head;
+      const pivot=vec3(sourceBone?.pivot,[0,24,0]);
+      const node=new Bone(`${prefix}${key}`,pivot,parent,vec3(sourceBone?.rotation));
+      // The authored tail meshes are mirrored around the knot, but Blockbench's
+      // per-element pivots leave the two strands vertically staggered in this WebGL
+      // rig. Keep the model bytes untouched and compensate only at render time so
+      // both strands sit next to each other behind the knot, like in Minecraft.
+      if(key==="left_tail"){node.pos[1]=.78;node.pos[0]=-.10;}
+      else if(key==="left_tail2"){node.pos[0]=-.95;}
+      else if(key==="right_tail"){node.pos[1]=-.78;node.pos[0]=.10;}
+      else if(key==="right_tail2"){node.pos[0]=.48;}
+      this.bones.set(node.name,node);created.set(key,node);
+      for(const cube of Array.isArray(sourceBone?.cubes)?sourceBone.cubes:[]){
+        if(!cube?.size)continue;
+        node.drawables.push(this.makeGeoBoxDrawable(cube,tex,pivot,Boolean(sourceBone?.mirror)));
+      }
+      return node;
+    };
+    // Render the exact exported Blockbench/GeckoLib bandana subtree.  Helper player bones
+    // (bipedHead/armorHead) are attachment markers only and are intentionally not duplicated.
+    for(const name of ["bandana","knot","left_tail","left_tail2","right_tail","right_tail2"])create(name);
+    return created.size>0;
   }
   buildCosmeticGeometry(source:LoadedRendererCosmetic,tex:any){let rawBones=this.geometryBones(source.asset.model);if(!rawBones.length)return false;const kind=source.asset.kind.toLowerCase();
-    // Never let an authoring/helper head cube replace the real Minecraft head. Bandanas in
-    // particular ship a standalone 8x8x8 `head` preview bone next to the real `armorHead` tree.
-    // Live catalogs are not always perfectly typed, so also detect the cosmetic by id/name/definition.
+    // Bandanas use the exact authored model subtree, attached directly to the player head.
     const def:any=source.asset.definition||{};const bandanaHint=`${source.asset.id} ${source.asset.name} ${kind} ${String(def.category||"")} ${String(def.variantGroup||"")}`.toLowerCase();const isBandana=bandanaHint.includes("bandana")||bandanaHint.includes("tied_bandana");
     if(isBandana&&rawBones.some((bone:any)=>String(bone?.name||"").toLowerCase()==="armorhead"))return this.buildBandanaClientGeometry(source,tex,rawBones);
-    const prefix=`cosmetic:${source.asset.id}:`,created=new Map<string,Bone>(),pending=rawBones.map((bone:any,index:number)=>({bone,index}));let guard=pending.length+3;while(pending.length&&guard-->0){let progressed=false;for(let i=pending.length-1;i>=0;i--){const {bone,index}=pending[i],name=String(bone?.name||`bone_${index}`),parentName=typeof bone?.parent==="string"?bone.parent:"";let parent=parentName?created.get(parentName):undefined;if(parentName&&!parent){parent=this.playerAttachment(parentName,source.asset.kind,parentName,false);if(!parent)continue}if(!parent)parent=this.playerAttachment(undefined,source.asset.kind,name,true) ?? null;const pivot=vec3(bone?.pivot),rotation=vec3(bone?.rotation);
-      // Bandanas are rendered from the exact authored Bedrock/GeckoLib geometry.
-      // Do not nudge knot/tail bones or replace their face UVs: those launcher-only
-      // corrections were what made the rear knot look detached/doubled compared
-      // with the in-game armorHead render.
-      const node=new Bone(prefix+name,pivot,parent,rotation);this.bones.set(prefix+name,node);if(!parent)this.topBones.push(node);created.set(name,node);for(const cube of Array.isArray(bone?.cubes)?bone.cubes:[]){if(!cube?.size)continue;node.drawables.push(this.makeGeoBoxDrawable(cube,tex,pivot,Boolean(bone?.mirror)))}pending.splice(i,1);progressed=true}if(!progressed)break}
+    const shouldSkipBone=(bone:any)=>{if(!isBandana)return false;const name=String(bone?.name||"").trim().toLowerCase();return name==="head"||name==="preview_head"};
+    rawBones=rawBones.filter((bone:any)=>!shouldSkipBone(bone));
+    const prefix=`cosmetic:${source.asset.id}:`,created=new Map<string,Bone>(),pending=rawBones.map((bone:any,index:number)=>({bone,index}));let guard=pending.length+3;while(pending.length&&guard-->0){let progressed=false;for(let i=pending.length-1;i>=0;i--){const {bone,index}=pending[i],name=String(bone?.name||`bone_${index}`),parentName=typeof bone?.parent==="string"?bone.parent:"";let parent=parentName?created.get(parentName):undefined;if(parentName&&!parent){parent=this.playerAttachment(parentName,source.asset.kind,parentName,false);if(!parent)continue}if(!parent)parent=this.playerAttachment(undefined,source.asset.kind,name,true) ?? null;const pivot=vec3(bone?.pivot),rotation=vec3(bone?.rotation);const node=new Bone(prefix+name,pivot,parent,rotation);this.bones.set(prefix+name,node);if(!parent)this.topBones.push(node);created.set(name,node);for(const cube of Array.isArray(bone?.cubes)?bone.cubes:[]){if(!cube?.size)continue;node.drawables.push(this.makeGeoBoxDrawable(cube,tex,pivot,Boolean(bone?.mirror)))}pending.splice(i,1);progressed=true}if(!progressed)break}
     // Any malformed orphan bones are still rendered on the rig instead of making the entire cosmetic disappear.
-    for(const {bone,index} of pending){const name=String(bone?.name||`orphan_${index}`),pivot=vec3(bone?.pivot),node=new Bone(prefix+name,pivot,this.playerAttachment(undefined,source.asset.kind,name)??this.bones.get("bipedRig")!,vec3(bone?.rotation));this.bones.set(prefix+name,node);for(const cube of Array.isArray(bone?.cubes)?bone.cubes:[])if(cube?.size)node.drawables.push(this.makeGeoBoxDrawable(cube,tex,pivot,Boolean(bone?.mirror)));}
+    for(const {bone,index} of pending){if(shouldSkipBone(bone))continue;const name=String(bone?.name||`orphan_${index}`),pivot=vec3(bone?.pivot),node=new Bone(prefix+name,pivot,this.playerAttachment(undefined,source.asset.kind,name)??this.bones.get("bipedRig")!,vec3(bone?.rotation));this.bones.set(prefix+name,node);for(const cube of Array.isArray(bone?.cubes)?bone.cubes:[])if(cube?.size)node.drawables.push(this.makeGeoBoxDrawable(cube,tex,pivot,Boolean(bone?.mirror)));}
     return true;}
   addFallbackCosmetic(source:LoadedRendererCosmetic,tex:any){const kind=source.asset.kind.toLowerCase(),body=this.bones.get("bipedBody")!,head=this.bones.get("bipedHead")!;const full={front:{r:[0,0,tex.w,tex.h]},back:{r:[0,0,tex.w,tex.h]},left:{r:[0,0,tex.w,tex.h]},right:{r:[0,0,tex.w,tex.h]},top:{r:[0,0,tex.w,tex.h]},bottom:{r:[0,0,tex.w,tex.h]}};const drawable=(origin:number[],size:number[],pivot:number[],rotation=[0,0,0])=>{const center=[origin[0]+size[0]/2,origin[1]+size[1]/2,origin[2]+size[2]/2],local=mm(mt(center[0]-pivot[0],center[1]-pivot[1],center[2]-pivot[2]),mq(qEulerXYZ(...rotation))),mesh=this.makeBoxMesh(size,full,tex,false);return{mesh,local,tex,alpha:.00001}};
     if(kind==="cape"){
       // Match the client's PlayerCapeModel more closely: the cape is a thin cloth hinged
       // just behind the jacket layer, not a one-block-thick slab. The mesh itself carries
       // a gentle downward curve, so it stays close to the shoulders and falls naturally.
-      const cape=new Bone(`cosmetic:${source.asset.id}:cape`,[0,23.82,2.46],body,[0,0,0]);
+      const cape=new Bone(`cosmetic:${source.asset.id}:cape`,[0,23.58,2.58],body,[6.5,0,0]);
       cape.drawables.push({mesh:this.makeCapeMesh(tex),local:m4(),tex,alpha:.00001});
       this.bones.set(cape.name,cape);
       this.cosmeticRoots.push({bone:cape,kind,phase:0});

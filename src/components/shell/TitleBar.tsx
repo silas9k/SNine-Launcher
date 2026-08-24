@@ -1,4 +1,4 @@
-import { Home, Minus, Settings as SettingsIcon, Square, X, Shirt } from "lucide-react";
+import { Flag, Home, Minus, Settings as SettingsIcon, Square, X, Shirt } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { IconButton } from "../ui";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -33,6 +33,10 @@ export function TitleBar() {
         <button type="button" className={page === "skins" ? "is-active" : ""} onClick={() => setPage("skins")}>
           <Shirt aria-hidden="true" />
           <span>SKINS</span>
+        </button>
+        <button type="button" className={page === "capes" ? "is-active" : ""} onClick={() => setPage("capes")}>
+          <Flag aria-hidden="true" />
+          <span>CAPES</span>
         </button>
       </nav>
 

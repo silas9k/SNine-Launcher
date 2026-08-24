@@ -1,13 +1,19 @@
 use base64::{engine::general_purpose::{STANDARD as BASE64, STANDARD_NO_PAD as BASE64_NO_PAD}, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
-use std::{collections::BTreeMap, fs, path::{Path, PathBuf}, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs,
+    path::{Path, PathBuf},
+    sync::OnceLock,
+    time::{Duration, Instant},
+};
 use tauri::State;
 
 use crate::{auth::service::AuthService, foundation::CoreServices};
 
-const DEFAULT_BACKEND_BASE_URL: &str = "http://31.70.89.55:25614/api/v1";
-const DEFAULT_BACKEND_WEBSOCKET_URL: &str = "ws://31.70.89.55:8789";
+const BACKEND_ENDPOINTS: &str = include_str!("../resources/backend-endpoints.json");
+const PINNED_BACKEND_CERTIFICATE: &[u8] = include_bytes!("../resources/backend-cert.crt");
 const MAX_ASSET_BYTES: usize = 32 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,20 +68,154 @@ pub struct LauncherSkinSnapshot {
     pub status_message: String,
 }
 
-fn backend_base_url() -> String {
-    std::env::var("SNINE_BACKEND_BASE_URL")
-        .ok()
-        .map(|value| value.trim().trim_end_matches('/').to_string())
-        .filter(|value| value.starts_with("http://") || value.starts_with("https://"))
-        .unwrap_or_else(|| DEFAULT_BACKEND_BASE_URL.to_string())
+#[derive(Debug, Clone)]
+pub(crate) struct SnineBackendSession {
+    pub token: String,
+    pub uuid: String,
 }
 
-fn backend_websocket_url() -> String {
+#[derive(Debug, Clone)]
+struct CachedSnineBackendSession {
+    session: SnineBackendSession,
+    valid_until: Instant,
+}
+
+static BACKEND_SESSIONS: OnceLock<tokio::sync::Mutex<HashMap<String, CachedSnineBackendSession>>> = OnceLock::new();
+
+fn backend_sessions() -> &'static tokio::sync::Mutex<HashMap<String, CachedSnineBackendSession>> {
+    BACKEND_SESSIONS.get_or_init(|| tokio::sync::Mutex::new(HashMap::new()))
+}
+
+pub(crate) async fn invalidate_backend_session(account_id: &str) {
+    backend_sessions().lock().await.remove(&account_id.to_ascii_lowercase());
+}
+
+pub(crate) async fn ensure_backend_session(
+    auth: &AuthService,
+    account_id: &str,
+    username: &str,
+) -> Result<SnineBackendSession, String> {
+    let cache_key = account_id.trim().to_ascii_lowercase();
+    {
+        let cache = backend_sessions().lock().await;
+        if let Some(cached) = cache.get(&cache_key) {
+            if cached.valid_until > Instant::now() {
+                return Ok(cached.session.clone());
+            }
+        }
+    }
+
+    let requested_uuid = dashed_uuid(account_id)?;
+    let (account, minecraft_session) = auth.ensure_minecraft_session(account_id).await
+        .map_err(|error| format!("minecraft_session_failed:{}", error.descriptor().code))?;
+    let access_token = minecraft_session.minecraft_access_token
+        .ok_or_else(|| "minecraft_access_token_missing".to_string())?;
+    let requested_name = if account.username.trim().is_empty() { username.trim() } else { account.username.trim() };
+    if safe_minecraft_username(requested_name).is_none() {
+        return Err("invalid_minecraft_username".into());
+    }
+
+    let http = client()?;
+    let base = backend_base_url();
+    let challenge_response = http
+        .post(format!("{base}/handshake/challenge"))
+        .json(&json!({
+            "uuid": requested_uuid,
+            "name": requested_name,
+            "clientVersion": format!("SNine Launcher {}", env!("CARGO_PKG_VERSION")),
+        }))
+        .send().await
+        .map_err(|error| format!("snine_handshake_challenge_failed:{error}"))?;
+    if !challenge_response.status().is_success() {
+        return Err(format!("snine_handshake_challenge_http_{}", challenge_response.status().as_u16()));
+    }
+    let challenge: Value = challenge_response.json().await
+        .map_err(|error| format!("snine_handshake_challenge_json_failed:{error}"))?;
+    let challenge_id = challenge.get("challengeId").and_then(Value::as_str)
+        .ok_or_else(|| "snine_handshake_challenge_id_missing".to_string())?;
+    let server_id = challenge.get("serverId").and_then(Value::as_str)
+        .ok_or_else(|| "snine_handshake_server_id_missing".to_string())?;
+
+    let join_response = http
+        .post("https://sessionserver.mojang.com/session/minecraft/join")
+        .json(&json!({
+            "accessToken": access_token,
+            "selectedProfile": compact_uuid(&requested_uuid)?,
+            "serverId": server_id,
+        }))
+        .send().await
+        .map_err(|error| format!("minecraft_session_join_failed:{error}"))?;
+    if join_response.status().as_u16() != 204 {
+        return Err(format!("minecraft_session_join_http_{}", join_response.status().as_u16()));
+    }
+
+    let complete_response = http
+        .post(format!("{base}/handshake/complete"))
+        .json(&json!({
+            "challengeId": challenge_id,
+            "uuid": requested_uuid,
+            "name": requested_name,
+            "clientVersion": format!("SNine Launcher {}", env!("CARGO_PKG_VERSION")),
+        }))
+        .send().await
+        .map_err(|error| format!("snine_handshake_complete_failed:{error}"))?;
+    if !complete_response.status().is_success() {
+        return Err(format!("snine_handshake_complete_http_{}", complete_response.status().as_u16()));
+    }
+    let profile: Value = complete_response.json().await
+        .map_err(|error| format!("snine_handshake_complete_json_failed:{error}"))?;
+    if !profile.get("ok").and_then(Value::as_bool).unwrap_or(false) {
+        return Err("snine_handshake_rejected".into());
+    }
+    let token = profile.get("sessionToken").and_then(Value::as_str).unwrap_or("").trim().to_string();
+    if token.is_empty() { return Err("snine_session_token_missing".into()); }
+    let session = SnineBackendSession {
+        token,
+        uuid: profile.get("uuid").and_then(Value::as_str).unwrap_or(&requested_uuid).to_string(),
+    };
+    backend_sessions().lock().await.insert(cache_key, CachedSnineBackendSession {
+        session: session.clone(),
+        valid_until: Instant::now() + Duration::from_secs(30 * 60),
+    });
+    Ok(session)
+}
+
+fn insecure_local_backend_allowed() -> bool {
+    std::env::var("SNINE_ALLOW_INSECURE_LOCAL_BACKEND")
+        .ok()
+        .is_some_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+}
+
+fn validate_backend_endpoint(value: &str, websocket: bool) -> Option<String> {
+    let value = value.trim().trim_end_matches('/');
+    let parsed = reqwest::Url::parse(value).ok()?;
+    let scheme = parsed.scheme();
+    let secure = if websocket { scheme == "wss" } else { scheme == "https" };
+    if secure { return Some(value.to_string()); }
+    let local_scheme = if websocket { scheme == "ws" } else { scheme == "http" };
+    let local_host = parsed.host_str().is_some_and(|host| matches!(host, "localhost" | "127.0.0.1" | "::1"));
+    (local_scheme && local_host && insecure_local_backend_allowed()).then(|| value.to_string())
+}
+
+fn packaged_backend_endpoint(key: &str) -> Option<String> {
+    let parsed: Value = serde_json::from_str(BACKEND_ENDPOINTS).ok()?;
+    parsed.get(key).and_then(Value::as_str).map(str::to_string)
+}
+
+pub(crate) fn backend_base_url() -> String {
+    std::env::var("SNINE_BACKEND_BASE_URL")
+        .ok()
+        .and_then(|value| validate_backend_endpoint(&value, false))
+        .or_else(|| packaged_backend_endpoint("api").and_then(|value| validate_backend_endpoint(&value, false)))
+        .expect("SNine backend API endpoint is missing or insecure")
+}
+
+pub(crate) fn backend_websocket_url() -> String {
     std::env::var("SNINE_BACKEND_WEBSOCKET_URL")
         .ok()
-        .map(|value| value.trim().trim_end_matches('/').to_string())
-        .filter(|value| value.starts_with("ws://") || value.starts_with("wss://"))
-        .unwrap_or_else(|| DEFAULT_BACKEND_WEBSOCKET_URL.to_string())
+        .and_then(|value| validate_backend_endpoint(&value, true))
+        .or_else(|| packaged_backend_endpoint("websocket").and_then(|value| validate_backend_endpoint(&value, true)))
+        .expect("SNine backend WebSocket endpoint is missing or insecure")
 }
 
 fn compact_uuid(value: &str) -> Result<String, String> {
@@ -94,8 +234,11 @@ fn dashed_uuid(value: &str) -> Result<String, String> {
     ))
 }
 
-fn client() -> Result<reqwest::Client, String> {
+pub(crate) fn client() -> Result<reqwest::Client, String> {
+    let certificate = reqwest::Certificate::from_pem(PINNED_BACKEND_CERTIFICATE)
+        .map_err(|error| format!("snine_backend_certificate_invalid:{error}"))?;
     reqwest::Client::builder()
+        .add_root_certificate(certificate)
         .connect_timeout(Duration::from_secs(4))
         .timeout(Duration::from_secs(12))
         .user_agent(format!("SNine-Launcher/{}", env!("CARGO_PKG_VERSION")))
@@ -564,6 +707,44 @@ async fn build_assets(
     let mut assets = Vec::new();
     for (kind, id) in equipped_map {
         if kind == "emote" { continue; }
+
+        let custom_cape = if kind == "cape" {
+            id.strip_prefix("custom_cape_elytra:")
+                .map(|cape_id| (cape_id.trim().to_string(), "CAPE_ELYTRA"))
+                .or_else(|| id.strip_prefix("custom_cape:").map(|cape_id| (cape_id.trim().to_string(), "CAPE")))
+        } else {
+            None
+        };
+
+        if let Some((cape_id, template)) = custom_cape {
+            let texture_bytes = if cape_id.is_empty() {
+                None
+            } else {
+                let url = format!("{}/custom-capes/{}/texture", base.trim_end_matches('/'), cape_id);
+                match http.get(url).send().await {
+                    Ok(response) if response.status().is_success() => response.bytes().await.ok().map(|bytes| bytes.to_vec()),
+                    _ => None,
+                }
+            };
+            let definition = json!({
+                "id": id.clone(),
+                "type": kind.clone(),
+                "name": "Custom Cape",
+                "template": template,
+                "source": "custom-cape",
+                "capeId": cape_id,
+            });
+            assets.push(LauncherCosmeticAsset {
+                id,
+                kind,
+                name: "Custom Cape".to_string(),
+                texture_data_url: texture_bytes.as_deref().and_then(png_data_url),
+                model: None,
+                definition,
+            });
+            continue;
+        }
+
         let definition = if let Some(files) = files {
             remote_catalog_entry(http, base, files, &kind, &id).await
                 .or_else(|| local_pack.and_then(|root| local_catalog_entry(root, &kind, &id)))
@@ -592,6 +773,38 @@ async fn build_assets(
         assets.push(LauncherCosmeticAsset { id, kind, name, texture_data_url: texture_bytes.as_deref().and_then(png_data_url), model, definition });
     }
     assets
+}
+
+async fn merge_selected_custom_cape(
+    http: &reqwest::Client,
+    base: &str,
+    session_token: &str,
+    equipped: &mut BTreeMap<String, String>,
+) {
+    // The profile's equipped cape is authoritative. Older launcher builds always
+    // overlaid the persisted custom-cape selection here, so a custom cape could keep
+    // reappearing even after the player equipped a different normal cape in-game.
+    if equipped.get("cape").is_some_and(|value| !value.trim().is_empty()) {
+        return;
+    }
+    let response = match http
+        .get(format!("{}/custom-capes?scope=mine", base.trim_end_matches('/')))
+        .header("X-SNine-Session", session_token)
+        .send()
+        .await
+    {
+        Ok(response) if response.status().is_success() => response,
+        _ => return,
+    };
+    let payload: Value = match response.json().await {
+        Ok(value) => value,
+        Err(_) => return,
+    };
+    let Some(selected) = payload.get("selected").and_then(Value::as_object) else { return; };
+    let Some(cape_id) = selected.get("id").and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty()) else { return; };
+    let template = selected.get("template").and_then(Value::as_str).unwrap_or("CAPE");
+    let prefix = if template.eq_ignore_ascii_case("CAPE_ELYTRA") { "custom_cape_elytra:" } else { "custom_cape:" };
+    equipped.insert("cape".into(), format!("{prefix}{cape_id}"));
 }
 
 #[tauri::command]
@@ -625,7 +838,7 @@ pub async fn snine_launcher_live_state(
         return Err("snine_live_profile_rejected".into());
     }
 
-    let equipped_cosmetics: BTreeMap<String, String> = profile
+    let mut equipped_cosmetics: BTreeMap<String, String> = profile
         .get("equippedCosmetics")
         .and_then(Value::as_object)
         .map(|map| map.iter().filter_map(|(kind, value)| {
@@ -633,6 +846,7 @@ pub async fn snine_launcher_live_state(
             (!id.is_empty()).then_some((kind.trim().to_ascii_lowercase(), id.to_string()))
         }).collect())
         .unwrap_or_default();
+    merge_selected_custom_cape(&http, &base, token, &mut equipped_cosmetics).await;
 
     Ok(LauncherLiveState {
         ok: true,
@@ -669,46 +883,45 @@ pub async fn snine_launcher_resolve_cosmetics(
 #[tauri::command]
 pub async fn snine_launcher_cosmetics(
     core: State<'_, CoreServices>,
+    auth: State<'_, AuthService>,
     account_id: String,
     username: String,
     profile_id: Option<String>,
 ) -> Result<LauncherCosmeticSnapshot, String> {
-    let uuid = dashed_uuid(&account_id)?;
     let base = backend_base_url();
     let http = client()?;
     let local_pack = profile_id.as_deref().and_then(|id| runtime_pack_root(core.inner(), id));
-
-    let handshake = match http.post(format!("{base}/handshake"))
-        .json(&json!({ "uuid": uuid, "name": username, "clientVersion": format!("SNine Launcher {}", env!("CARGO_PKG_VERSION")) }))
-        .send().await {
-            Ok(response) if response.status().is_success() => response,
-            Ok(response) => {
-                if let Some(mut cached) = read_cached_snapshot(core.inner(), &account_id) {
-                    cached.ok = true; cached.online = false; cached.source = "launcher-cache".into();
-                    cached.status_message = format!("backend_http_{}_using_cache", response.status().as_u16());
-                    return Ok(cached);
-                }
-                return Ok(LauncherCosmeticSnapshot { ok: false, player_name: username, online: false, equipped: Vec::new(), source: base, status_message: format!("backend_http_{}", response.status().as_u16()), live_sync: None });
+    let mut session = match ensure_backend_session(auth.inner(), &account_id, &username).await {
+        Ok(session) => session,
+        Err(error) => {
+            if let Some(mut cached) = read_cached_snapshot(core.inner(), &account_id) {
+                cached.ok = true; cached.online = false; cached.source = "launcher-cache".into();
+                cached.status_message = format!("{error}_using_cache");
+                return Ok(cached);
             }
-            Err(error) => {
-                if let Some(mut cached) = read_cached_snapshot(core.inner(), &account_id) {
-                    cached.ok = true; cached.online = false; cached.source = "launcher-cache".into();
-                    cached.status_message = "backend_offline_using_last_synced_loadout".into();
-                    return Ok(cached);
-                }
-                return Ok(LauncherCosmeticSnapshot { ok: false, player_name: username, online: false, equipped: Vec::new(), source: base, status_message: format!("backend_unreachable:{error}"), live_sync: None });
-            }
-        };
-
-    let profile: Value = handshake.json().await.map_err(|error| format!("snine_handshake_json_failed:{error}"))?;
-    if !profile.get("ok").and_then(Value::as_bool).unwrap_or(false) {
-        return Ok(LauncherCosmeticSnapshot { ok: false, player_name: username, online: false, equipped: Vec::new(), source: base, status_message: "backend_handshake_rejected".into(), live_sync: None });
+            return Ok(LauncherCosmeticSnapshot { ok: false, player_name: username, online: false, equipped: Vec::new(), source: base, status_message: error, live_sync: None });
+        }
+    };
+    let mut profile_response = http.get(format!("{base}/profile/{}", session.uuid))
+        .header("X-SNine-Session", &session.token)
+        .send().await.map_err(|error| format!("snine_profile_request_failed:{error}"))?;
+    if profile_response.status().as_u16() == 401 {
+        invalidate_backend_session(&account_id).await;
+        session = ensure_backend_session(auth.inner(), &account_id, &username).await?;
+        profile_response = http.get(format!("{base}/profile/{}", session.uuid))
+            .header("X-SNine-Session", &session.token)
+            .send().await.map_err(|error| format!("snine_profile_retry_failed:{error}"))?;
     }
+    if !profile_response.status().is_success() {
+        return Ok(LauncherCosmeticSnapshot { ok: false, player_name: username, online: false, equipped: Vec::new(), source: base, status_message: format!("backend_http_{}", profile_response.status().as_u16()), live_sync: None });
+    }
+    let profile: Value = profile_response.json().await.map_err(|error| format!("snine_profile_json_failed:{error}"))?;
     let player_name = profile.get("name").and_then(Value::as_str).unwrap_or(&username).to_string();
     let online = profile.get("online").and_then(Value::as_bool).unwrap_or(true);
-    let equipped_map: BTreeMap<String, String> = profile.get("equippedCosmetics").and_then(Value::as_object)
+    let mut equipped_map: BTreeMap<String, String> = profile.get("equippedCosmetics").and_then(Value::as_object)
         .map(|map| map.iter().filter_map(|(kind, value)| value.as_str().map(|id| (kind.to_ascii_lowercase(), id.to_string())))
         .filter(|(_, id)| !id.trim().is_empty()).collect()).unwrap_or_default();
+    merge_selected_custom_cape(&http, &base, &session.token, &mut equipped_map).await;
 
     let index: Option<Value> = match http.get(format!("{base}/cosmetic-content/index")).send().await {
         Ok(response) if response.status().is_success() => response.json().await.ok(),
@@ -717,9 +930,9 @@ pub async fn snine_launcher_cosmetics(
     let files = index.as_ref().and_then(|value| value.get("files")).and_then(Value::as_object);
     let assets = build_assets(&http, &base, files, local_pack.as_deref(), equipped_map).await;
     let source = if files.is_some() { "snine-backend+runtime-pack" } else if local_pack.is_some() { "snine-backend+local-runtime-pack" } else { "snine-backend" };
-    let session_token = profile.get("sessionToken").and_then(Value::as_str).unwrap_or("").trim().to_string();
-    let player_uuid = profile.get("uuid").and_then(Value::as_str).unwrap_or(&uuid).to_string();
-    let live_sync = (!session_token.is_empty()).then(|| LauncherLiveSync {
+    let session_token = session.token.clone();
+    let player_uuid = session.uuid.clone();
+    let live_sync = Some(LauncherLiveSync {
         websocket_url: backend_websocket_url(),
         session_token,
         player_uuid,

@@ -3,7 +3,8 @@
   "identifier": "default",
   "description": "Permissions for the SNine Launcher main window",
   "windows": [
-    "main"
+    "main",
+    "minecraft-logs-*"
   ],
   "permissions": [
     "core:default",

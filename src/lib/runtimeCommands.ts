@@ -18,6 +18,12 @@ import {
   type Phase5RuntimeStatus,
 } from "./generated/ipc-contracts";
 
+export interface MinecraftLogChunk {
+  text: string;
+  nextOffset: number;
+  fileSize: number;
+}
+
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -97,6 +103,28 @@ export const runtimeCommands = {
     isTauriRuntime()
       ? invoke<Phase5LaunchStatus[]>(PHASE5_LAUNCH_STATUSES)
       : Promise.resolve([]),
+
+  logRead: (profileId: string, launchId: string, offset = 0): Promise<MinecraftLogChunk> =>
+    isTauriRuntime()
+      ? invoke<MinecraftLogChunk>("phase5_minecraft_log_read", { profileId, launchId, offset })
+      : Promise.resolve({ text: "", nextOffset: offset, fileSize: 0 }),
+
+  logExport: (profileId: string, launchId: string): Promise<string> =>
+    isTauriRuntime()
+      ? invoke<string>("phase5_minecraft_log_export", { profileId, launchId })
+      : Promise.reject(desktopOnly()),
+
+  logOpen: async (profileId: string, launchId: string, accountName: string): Promise<void> => {
+    if (!isTauriRuntime()) throw desktopOnly();
+    const args = { profileId, launchId, accountName };
+    try {
+      await invoke<void>("phase5_minecraft_log_window_open", args);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? "");
+      if (!message.toLowerCase().includes("command") || !message.toLowerCase().includes("not found")) throw error;
+      await invoke<void>("minecraft_log_window_open", args);
+    }
+  },
 
   setComponent: (
     profileId: string,
