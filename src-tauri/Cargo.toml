@@ -1,6 +1,6 @@
 [package]
 name = "s9lab-launcher"
-version = "1.0.9"
+version = "1.0.10"
 description = "Official SNine Minecraft Launcher"
 repository = "https://github.com/silas9k/S9Lab-Launcher"
 homepage = "https://github.com/silas9k/S9Lab-Launcher"
@@ -55,3 +55,4 @@ debug = 1
 
 [profile.dev.package."*"]
 opt-level = 2
+
