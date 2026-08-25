@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Phase4Profile, Phase5LaunchStatus } from "./generated/ipc-contracts";
+import type { Phase4Profile, Phase5LaunchStatus, Phase5RuntimeStatus } from "./generated/ipc-contracts";
 
 export interface InstanceSettings {
   formatVersion: 1;
@@ -12,6 +12,10 @@ export interface InstanceSettings {
   fullscreen: boolean;
   customJavaExecutable: string | null;
   lastPlayedAtUnix: number | null;
+  shareResourcepacks: boolean;
+  shareWorlds: boolean;
+  shareShaderpacks: boolean;
+  shareOptions: boolean;
 }
 
 export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
@@ -25,7 +29,22 @@ export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
   fullscreen: false,
   customJavaExecutable: null,
   lastPlayedAtUnix: null,
+  shareResourcepacks: false,
+  shareWorlds: false,
+  shareShaderpacks: false,
+  shareOptions: false,
 };
+
+export interface ProfileWorkspaceEntry {
+  profile: Phase4Profile;
+  runtime: Phase5RuntimeStatus;
+  settings: InstanceSettings;
+}
+
+export interface ProfilesWorkspace {
+  entries: ProfileWorkspaceEntry[];
+  launches: Phase5LaunchStatus[];
+}
 
 function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -36,6 +55,8 @@ function desktopOnly() {
 }
 
 export const instanceCommands = {
+  workspace: (): Promise<ProfilesWorkspace> =>
+    isTauriRuntime() ? invoke<ProfilesWorkspace>("phase5_profiles_workspace") : Promise.resolve({ entries: [], launches: [] }),
   settings: (profileId: string): Promise<InstanceSettings> =>
     isTauriRuntime() ? invoke("phase5_instance_settings", { profileId }) : Promise.resolve({ ...DEFAULT_INSTANCE_SETTINGS }),
   saveSettings: (profileId: string, settings: InstanceSettings): Promise<InstanceSettings> =>
@@ -44,6 +65,6 @@ export const instanceCommands = {
     isTauriRuntime() ? invoke("phase4_rename_profile", { profileId, displayName }) : desktopOnly(),
   launch: (profileId: string): Promise<Phase5LaunchStatus> =>
     isTauriRuntime() ? invoke("phase5_launch_instance", { profileId }) : desktopOnly(),
-  openFolder: (profileId: string, folder: "game" | "mods" | "resourcepacks" | "screenshots" | "logs"): Promise<void> =>
+  openFolder: (profileId: string, folder: "game" | "mods" | "resourcepacks" | "worlds" | "shaderpacks" | "screenshots" | "logs"): Promise<void> =>
     isTauriRuntime() ? invoke("phase5_open_instance_folder", { profileId, folder }) : desktopOnly(),
 };

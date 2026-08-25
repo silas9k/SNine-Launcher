@@ -5,6 +5,7 @@ use crate::{
     foundation::CoreServices,
     minecraft::{
         instance_settings::{InstanceSettings, InstanceSettingsStore},
+        profile_sharing::ProfileSharingService,
         java_runtime::JavaRuntimeResolver,
         neoforge::inspect_verified_installer,
         profile_launch::{
@@ -22,7 +23,7 @@ use crate::{
         ProfileInstallPlan,
     },
     profiles::model::{
-        LockedCacheBlob, ProfileLockV2, ProfileManifestV2, ResolvedLaunchArgument,
+        LockedCacheBlob, ProfileLockV2, ProfileManifestV2, ProfileSummary, ResolvedLaunchArgument,
         ResolvedLaunchConfiguration, ResolvedLaunchRule, S9labComponentSelection,
     },
     runtime::{
@@ -103,6 +104,22 @@ pub struct Phase5RuntimeStatus {
     pub s9lab_component_capability: CapabilityStatus,
 }
 
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Phase5ProfileWorkspaceEntry {
+    pub profile: ProfileSummary,
+    pub runtime: Phase5RuntimeStatus,
+    pub settings: InstanceSettings,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Phase5ProfilesWorkspace {
+    pub entries: Vec<Phase5ProfileWorkspaceEntry>,
+    pub launches: Vec<ProfileLaunchStatus>,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct InstalledComponentSummary {
@@ -130,6 +147,7 @@ pub struct MinecraftRuntimeService {
     java: JavaRuntimeResolver,
     components: S9labComponentProvider,
     processes: ProfileProcessManager,
+    synced_sharing_launches: Arc<tokio::sync::Mutex<BTreeSet<String>>>,
 }
 
 impl MinecraftRuntimeService {
@@ -144,6 +162,7 @@ impl MinecraftRuntimeService {
             java: JavaRuntimeResolver::new(core.registry().clone()),
             components: S9labComponentProvider::production(),
             processes: ProfileProcessManager::default(),
+            synced_sharing_launches: Arc::new(tokio::sync::Mutex::new(BTreeSet::new())),
         })
     }
 
@@ -273,14 +292,43 @@ impl MinecraftRuntimeService {
     }
 
     pub async fn status(&self, profile_id: &str) -> AppResult<Phase5RuntimeStatus> {
+        let launches = self.launch_statuses().await?;
+        self.status_with_launches(profile_id, &launches)
+    }
+
+    pub async fn profiles_workspace(
+        &self,
+        profiles: Vec<ProfileSummary>,
+    ) -> AppResult<Phase5ProfilesWorkspace> {
+        let launches = self.launch_statuses().await?;
+        let running_profile_ids = launches
+            .iter()
+            .filter(|launch| matches!(launch.state, ProfileLaunchState::Preparing | ProfileLaunchState::CheckingFiles | ProfileLaunchState::Downloading | ProfileLaunchState::Starting | ProfileLaunchState::Running | ProfileLaunchState::Stopping))
+            .map(|launch| launch.profile_id.clone())
+            .collect::<Vec<_>>();
+        ProfileSharingService::new(self.registry.clone(), self.storage.clone())
+            .sync_servers_to_inactive_profiles(&running_profile_ids)?;
+        let settings_store = InstanceSettingsStore::new(self.registry.clone());
+        let mut entries = Vec::with_capacity(profiles.len());
+        for profile in profiles.into_iter().filter(|profile| profile.lifecycle_state == "active") {
+            let runtime = self.status_with_launches(&profile.id, &launches)?;
+            let settings = settings_store.load(&profile.id)?;
+            entries.push(Phase5ProfileWorkspaceEntry { profile, runtime, settings });
+        }
+        Ok(Phase5ProfilesWorkspace { entries, launches })
+    }
+
+    fn status_with_launches(
+        &self,
+        profile_id: &str,
+        all_launches: &[ProfileLaunchStatus],
+    ) -> AppResult<Phase5RuntimeStatus> {
         let profile = self.profile_for_read(profile_id)?;
         let projection = self.storage.runtime_projection(profile_id)?;
-        let launches = self
-            .processes
-            .statuses()
-            .await?
-            .into_iter()
+        let launches = all_launches
+            .iter()
             .filter(|launch| launch.profile_id == profile_id)
+            .cloned()
             .collect::<Vec<_>>();
         let active_revision_id = profile
             .active_revision_id
@@ -294,12 +342,7 @@ impl MinecraftRuntimeService {
                     let projected_component = projection
                         .component_id
                         .zip(projection.component_version)
-                        .map(
-                            |(component_id, component_version)| InstalledComponentSummary {
-                                component_id,
-                                component_version,
-                            },
-                        );
+                        .map(|(component_id, component_version)| InstalledComponentSummary { component_id, component_version });
                     let install_state = if projection.revision_id != active_revision_id
                         || projected_component != component
                     {
@@ -418,6 +461,13 @@ impl MinecraftRuntimeService {
         settings.max_ram_mb = memory_mb;
         crate::minecraft::instance_settings::validate_settings(&settings)?;
         let step = std::time::Instant::now();
+        ProfileSharingService::new(self.registry.clone(), self.storage.clone())
+            .prepare_for_launch(profile_id, &settings)?;
+        eprintln!(
+            "[snine-launch-fast] shared profile data: {} ms",
+            step.elapsed().as_millis()
+        );
+        let step = std::time::Instant::now();
         let java = match settings.custom_java_executable.as_deref() {
             Some(executable) => {
                 self.java
@@ -485,13 +535,22 @@ impl MinecraftRuntimeService {
         settings: &InstanceSettings,
     ) -> AppResult<InstanceSettings> {
         self.profile_for_mutation(profile_id)?;
-        InstanceSettingsStore::new(self.registry.clone()).save(profile_id, settings)
+        let store = InstanceSettingsStore::new(self.registry.clone());
+        let previous = store.load(profile_id)?;
+        ProfileSharingService::new(self.registry.clone(), self.storage.clone())
+            .settings_changed(profile_id, &previous, settings)?;
+        store.save(profile_id, settings)
     }
 
     pub fn open_instance_folder(&self, profile_id: &str, folder: &str) -> AppResult<()> {
         self.profile_for_read(profile_id)?;
-        let path = InstanceSettingsStore::new(self.registry.clone())
-            .instance_directory(profile_id, folder)?;
+        let store = InstanceSettingsStore::new(self.registry.clone());
+        let settings = store.load(profile_id)?;
+        let sharing = ProfileSharingService::new(self.registry.clone(), self.storage.clone());
+        let path = match sharing.directory_for_open(profile_id, folder, &settings)? {
+            Some(path) => path,
+            None => store.instance_directory(profile_id, folder)?,
+        };
         opener::open(path).map_err(|_| AppError::coded("instance_folder_open_failed"))
     }
 
@@ -521,11 +580,41 @@ impl MinecraftRuntimeService {
     }
 
     pub async fn stop(&self, launch_id: &str) -> AppResult<ProfileLaunchStatus> {
-        self.processes.stop(launch_id).await
+        let status = self.processes.stop(launch_id).await?;
+        self.sync_profile_sharing_once(&status).await;
+        Ok(status)
     }
 
     pub async fn launch_statuses(&self) -> AppResult<Vec<ProfileLaunchStatus>> {
-        self.processes.statuses().await
+        let statuses = self.processes.statuses().await?;
+        for status in &statuses {
+            if status.state == ProfileLaunchState::Exited {
+                self.sync_profile_sharing_once(status).await;
+            }
+        }
+        Ok(statuses)
+    }
+
+    async fn sync_profile_sharing_once(&self, status: &ProfileLaunchStatus) {
+        let mut synced = self.synced_sharing_launches.lock().await;
+        if !synced.insert(status.launch_id.clone()) {
+            return;
+        }
+        if synced.len() > 64 {
+            synced.clear();
+            synced.insert(status.launch_id.clone());
+        }
+        drop(synced);
+        let registry = self.registry.clone();
+        let storage = self.storage.clone();
+        let profile_id = status.profile_id.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            if let Err(error) = ProfileSharingService::new(registry, storage)
+                .sync_finished_profile(&profile_id)
+            {
+                eprintln!("[SNine Launcher] shared profile data sync failed: {error}");
+            }
+        });
     }
 
     async fn resolve_and_download(

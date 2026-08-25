@@ -2,6 +2,7 @@ use crate::{
     app::paths::LauncherPaths,
     content::ContentKind,
     content_projection::immutable_projected_targets_for_duplicate,
+    minecraft::profile_sharing::ProfileSharingService,
     error::{AppError, AppResult},
     foundation::CoreServices,
     operations::{
@@ -324,6 +325,8 @@ impl ProfileService {
                 }
                 self.create_mutable_layout(&profile_id)?;
             }
+            ProfileSharingService::new(self.registry.clone(), self.storage.clone())
+                .inherit_servers_for_new_profile(&profile_id)?;
             Ok(())
         })();
         if let Err(error) = preparation {

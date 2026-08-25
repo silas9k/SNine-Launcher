@@ -5218,3 +5218,15 @@ html, body, button, input, select, textarea {
   .snine-profile-installer__two, .instance-editor__grid { grid-template-columns: 1fr; }
   .snine-profile-detail__actions { flex-wrap: wrap; }
 }
+
+.snine-profile-sharing { display: grid; gap: 10px; margin-top: 4px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--panel-soft) 86%, transparent); }
+.snine-profile-sharing__header { display: grid; gap: 3px; }
+.snine-profile-sharing__header strong { font-size: 8px; }
+.snine-profile-sharing__header span { color: var(--text-muted); font-size: 7px; line-height: 1.45; }
+.snine-profile-sharing__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.snine-profile-sharing__servers { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--accent-soft) 60%, transparent); }
+.snine-profile-sharing__servers > svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--accent-hover); }
+.snine-profile-sharing__servers > span { display: grid; gap: 2px; }
+.snine-profile-sharing__servers strong { font-size: 7.5px; }
+.snine-profile-sharing__servers small { color: var(--text-muted); font-size: 6.5px; line-height: 1.4; }
+@media (max-width: 720px) { .snine-profile-sharing__grid { grid-template-columns: 1fr; } }

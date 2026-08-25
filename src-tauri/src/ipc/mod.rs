@@ -142,6 +142,17 @@ pub fn phase4_rename_profile(
 }
 
 #[tauri::command]
+pub async fn phase5_profiles_workspace(
+    window: tauri::Window,
+    profiles: tauri::State<'_, ProfileService>,
+    runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
+) -> Result<crate::minecraft::service::Phase5ProfilesWorkspace, IpcError> {
+    authorize_main_window(&window)?;
+    let profiles = profiles.list_profiles().map_err(IpcError::from)?;
+    runtime.profiles_workspace(profiles).await.map_err(Into::into)
+}
+
+#[tauri::command]
 pub fn phase5_instance_settings(
     window: tauri::Window,
     runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,

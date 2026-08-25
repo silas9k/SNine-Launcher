@@ -34,6 +34,14 @@ pub struct InstanceSettings {
     pub custom_java_executable: Option<String>,
     #[serde(default)]
     pub last_played_at_unix: Option<i64>,
+    #[serde(default)]
+    pub share_resourcepacks: bool,
+    #[serde(default)]
+    pub share_worlds: bool,
+    #[serde(default)]
+    pub share_shaderpacks: bool,
+    #[serde(default)]
+    pub share_options: bool,
 }
 
 impl Default for InstanceSettings {
@@ -49,6 +57,10 @@ impl Default for InstanceSettings {
             fullscreen: false,
             custom_java_executable: None,
             last_played_at_unix: None,
+            share_resourcepacks: false,
+            share_worlds: false,
+            share_shaderpacks: false,
+            share_options: false,
         }
     }
 }
@@ -129,6 +141,8 @@ impl InstanceSettingsStore {
             "game" => "instance",
             "mods" => "instance/mods",
             "resourcepacks" => "instance/resourcepacks",
+            "worlds" => "instance/saves",
+            "shaderpacks" => "instance/shaderpacks",
             "screenshots" => "instance/screenshots",
             "logs" => "instance/logs",
             _ => return Err(AppError::coded("instance_folder_kind_invalid")),

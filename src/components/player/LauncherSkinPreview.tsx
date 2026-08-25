@@ -52,14 +52,18 @@ export function LauncherSkinPreview({
       return;
     }
     renderer.setNametagAnchorListener?.(setNametagAnchor);
-    // Keep the nametag as a real world-facing plane instead of a billboard.
-    // The preview rotates by orbiting the camera around a stationary player, so
-    // applying the inverse camera yaw makes the label appear fixed to the player:
-    // front at 0°, edge-on at 90° and visibly mirrored from behind at 180°.
+    // Keep the nametag fixed over the projected head anchor and only change its
+    // horizontal facing as the camera orbits the player. Using an orthographic
+    // cosine squash avoids the odd CSS-perspective warp/orbiting motion from a
+    // rotateY() plane while preserving the desired Minecraft-like states:
+    // 0° = normal, 90° = edge-on, 180° = mirrored/backwards.
     renderer.setCameraYawListener?.((yaw) => {
       const plane = nametagPlaneRef.current;
       if (!plane) return;
-      plane.style.transform = `perspective(520px) rotateY(${-yaw}deg)`;
+      const facing = Math.cos((yaw * Math.PI) / 180);
+      const sign = facing < 0 ? -1 : 1;
+      const scaleX = sign * Math.max(Math.abs(facing), 0.025);
+      plane.style.transform = `scaleX(${scaleX})`;
     });
     renderer.setCameraPreset(cameraYaw, cameraPitch, cameraDistance, cameraTargetY);
     rendererRef.current = renderer;

@@ -113,6 +113,7 @@ pub fn run() {
             ipc::phase5_repair_profile,
             ipc::phase5_launch_profile,
             ipc::phase5_launch_instance,
+            ipc::phase5_profiles_workspace,
             ipc::phase5_instance_settings,
             ipc::phase5_save_instance_settings,
             ipc::phase5_open_instance_folder,
