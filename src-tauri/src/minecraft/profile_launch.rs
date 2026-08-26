@@ -440,6 +440,7 @@ fn collect_finished_entries(
     Ok(statuses)
 }
 
+#[allow(dead_code)]
 fn redact_launch_arguments(args: &[String]) -> Vec<String> {
     const SENSITIVE_FLAGS: [&str; 4] =
         ["--accesstoken", "--clientid", "--xuid", "--userproperties"];

@@ -247,6 +247,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::field_reassign_with_default)]
     fn ram_bounds_and_jvm_ownership_are_enforced() {
         let mut settings = InstanceSettings::default();
         settings.min_ram_mb = 8_192;

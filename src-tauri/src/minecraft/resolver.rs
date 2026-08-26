@@ -281,6 +281,7 @@ pub struct ResolvedLoader {
 pub struct RuntimeResolver {
     http: ControlledHttpClient,
     version_manifest_cache: Arc<Mutex<Option<(Instant, VersionManifest)>>>,
+    #[allow(clippy::type_complexity)]
     fabric_catalog_cache: Arc<Mutex<BTreeMap<String, (Instant, Vec<LoaderCatalogEntry>)>>>,
 }
 

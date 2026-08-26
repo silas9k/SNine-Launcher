@@ -641,13 +641,13 @@ impl MinecraftRuntimeService {
         let registry = self.registry.clone();
         let storage = self.storage.clone();
         let profile_id = status.profile_id.clone();
-        let _ = tokio::task::spawn_blocking(move || {
+        std::mem::drop(tokio::task::spawn_blocking(move || {
             if let Err(error) =
                 ProfileSharingService::new(registry, storage).sync_finished_profile(&profile_id)
             {
                 eprintln!("[SNine Launcher] shared profile data sync failed: {error}");
             }
-        });
+        }));
     }
 
     async fn resolve_and_download(

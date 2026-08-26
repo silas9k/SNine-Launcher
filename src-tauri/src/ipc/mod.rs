@@ -777,7 +777,7 @@ pub async fn phase5_launch_instance(
     app: tauri::AppHandle,
     runtime: tauri::State<'_, crate::minecraft::service::MinecraftRuntimeService>,
     auth: tauri::State<'_, AuthService>,
-    core: tauri::State<'_, crate::foundation::CoreServices>,
+    _core: tauri::State<'_, crate::foundation::CoreServices>,
     profile_id: String,
 ) -> Result<crate::minecraft::profile_launch::ProfileLaunchStatus, IpcError> {
     authorize_main_window(&window)?;

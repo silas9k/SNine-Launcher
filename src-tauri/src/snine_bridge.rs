@@ -501,6 +501,7 @@ fn safe_minecraft_username(value: &str) -> Option<&str> {
         .then_some(value)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn download_skin_snapshot(
     http: &reqwest::Client,
     core: &CoreServices,
