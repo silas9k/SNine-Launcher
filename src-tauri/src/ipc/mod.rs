@@ -39,6 +39,7 @@ pub const PHASE3_REMOVE_ACCOUNT_COMMAND: &str = "phase3_remove_account";
 pub const PHASE3_ASSIGN_PROFILE_ACCOUNT_COMMAND: &str = "phase3_assign_profile_account";
 pub const PHASE4_LIST_PROFILES_COMMAND: &str = "phase4_list_profiles";
 pub const PHASE4_CREATE_PROFILE_COMMAND: &str = "phase4_create_profile";
+pub const PHASE4_RENAME_PROFILE_COMMAND: &str = "phase4_rename_profile";
 pub const PHASE4_DUPLICATE_PROFILE_COMMAND: &str = "phase4_duplicate_profile";
 pub const PHASE4_ARCHIVE_PROFILE_COMMAND: &str = "phase4_archive_profile";
 pub const PHASE4_TRASH_PROFILE_COMMAND: &str = "phase4_trash_profile";
@@ -46,6 +47,8 @@ pub const PHASE4_RESTORE_PROFILE_COMMAND: &str = "phase4_restore_profile";
 pub const PHASE4_SET_PROFILE_FAVORITE_COMMAND: &str = "phase4_set_profile_favorite";
 pub const PHASE4_CACHE_GC_PREVIEW_COMMAND: &str = "phase4_cache_gc_preview";
 pub const PHASE4_QUARANTINE_CACHE_COMMAND: &str = "phase4_quarantine_unreferenced_cache";
+pub const PHASE4_QUARANTINE_UNREFERENCED_CACHE_COMMAND: &str =
+    "phase4_quarantine_unreferenced_cache";
 pub const PHASE5_RUNTIME_CATALOG_COMMAND: &str = "phase5_runtime_catalog";
 pub const PHASE5_S9LAB_COMPONENT_CATALOG_COMMAND: &str = "phase5_s9lab_component_catalog";
 pub const PHASE5_PROFILE_RUNTIME_STATUS_COMMAND: &str = "phase5_profile_runtime_status";
@@ -81,6 +84,8 @@ pub const PHASE7_ROLLBACK_PROFILE_COMMAND: &str = "phase7_rollback_profile";
 pub const PHASE7_RESTORE_BACKUP_COMMAND: &str = "phase7_restore_backup";
 pub const PHASE7_RUN_AUTOMATIC_UPDATES_COMMAND: &str = "phase7_run_automatic_updates";
 pub const PHASE8_CLOUD_SYNC_SNAPSHOT_COMMAND: &str = "phase8_cloud_sync_snapshot";
+pub const SNINE_CLIENT_UPDATE_CHECK_COMMAND: &str = "snine_client_update_check";
+pub const SNINE_CLIENT_DOWNLOAD_UPDATE_COMMAND: &str = "snine_client_download_update";
 pub const TYPED_IPC_ERROR_FIELDS: &[&str] = &["code", "messageKey", "params"];
 
 #[derive(Debug, Clone, Serialize)]
@@ -1264,6 +1269,7 @@ mod tests {
             PHASE4_TRASH_PROFILE_COMMAND,
             PHASE4_RESTORE_PROFILE_COMMAND,
             PHASE4_SET_PROFILE_FAVORITE_COMMAND,
+            PHASE4_RENAME_PROFILE_COMMAND,
             PHASE4_CACHE_GC_PREVIEW_COMMAND,
             PHASE4_QUARANTINE_CACHE_COMMAND,
             PHASE5_RUNTIME_CATALOG_COMMAND,
@@ -1272,9 +1278,15 @@ mod tests {
             PHASE5_INSTALL_PROFILE_COMMAND,
             PHASE5_REPAIR_PROFILE_COMMAND,
             PHASE5_LAUNCH_PROFILE_COMMAND,
+            PHASE5_LAUNCH_INSTANCE_COMMAND,
+            PHASE5_INSTANCE_SETTINGS_COMMAND,
+            PHASE5_SAVE_INSTANCE_SETTINGS_COMMAND,
+            PHASE5_OPEN_INSTANCE_FOLDER_COMMAND,
             PHASE5_STOP_LAUNCH_COMMAND,
             PHASE5_LAUNCH_STATUSES_COMMAND,
             PHASE5_SET_S9LAB_COMPONENT_COMMAND,
+            SNINE_CLIENT_UPDATE_CHECK_COMMAND,
+            SNINE_CLIENT_DOWNLOAD_UPDATE_COMMAND,
             PHASE6_CONTENT_SNAPSHOT_COMMAND,
             PHASE6_CHECK_CONTENT_UPDATES_COMMAND,
             PHASE6_MODRINTH_SEARCH_COMMAND,
@@ -1303,7 +1315,18 @@ mod tests {
                 .iter()
                 .find(|command| command.name == command_name)
                 .unwrap_or_else(|| panic!("missing contract for {command_name}"));
-            assert_eq!(command.error_type, "TypedIpcError");
+            let expected_error_type = if command_name == SNINE_CLIENT_UPDATE_CHECK_COMMAND
+                || command_name == SNINE_CLIENT_DOWNLOAD_UPDATE_COMMAND
+            {
+                "string"
+            } else {
+                "TypedIpcError"
+            };
+
+            assert_eq!(
+                command.error_type, expected_error_type,
+                "unexpected error type for {command_name}"
+            );
         }
         assert_eq!(contract.commands.len(), expected.len());
         assert_eq!(TYPED_IPC_ERROR_FIELDS, ["code", "messageKey", "params"]);

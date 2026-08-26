@@ -2356,8 +2356,19 @@ mod tests {
         let stopped = manager.stop("launch-first").await.expect("stop first");
         assert_eq!(stopped.launch_id, "launch-first");
         let statuses = manager.statuses().await.expect("remaining statuses");
-        assert_eq!(statuses.len(), 1);
-        assert_eq!(statuses[0].launch_id, "launch-second");
+        assert_eq!(statuses.len(), 2);
+
+        let stopped_status = statuses
+            .iter()
+            .find(|status| status.launch_id == "launch-first")
+            .expect("stopped launch remains in bounded history");
+        assert_eq!(stopped_status.state, ProfileLaunchState::Exited);
+
+        let remaining_status = statuses
+            .iter()
+            .find(|status| status.launch_id == "launch-second")
+            .expect("second launch remains active");
+        assert_eq!(remaining_status.state, ProfileLaunchState::Running);
         assert_eq!(
             manager
                 .stop("launch-first/launch-second")
