@@ -14,8 +14,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 if (Test-Path variable:PSNativeCommandUseErrorActionPreference) { $PSNativeCommandUseErrorActionPreference = $false }
 
-$expectedArchiveName = "S9Lab-Launcher-v1.0.8-final-source.zip"
-$expectedRootName = "S9Lab-Launcher-v1.0.8-final-source"
+$expectedArchiveName = "S9Lab-Launcher-v1.0.10-final-source.zip"
+$expectedRootName = "S9Lab-Launcher-v1.0.10-final-source"
 $publicRegistry = "https://registry.npmjs.org/"
 $results = [Collections.Generic.List[object]]::new()
 $environmentNames = @("TEMP", "TMP", "NPM_CONFIG_CACHE", "NPM_CONFIG_REGISTRY", "CARGO_HOME", "S9LAB_BROWSER_PATH", "S9LAB_VISUAL_OUTPUT", "S9LAB_PERFORMANCE_OUTPUT")
@@ -131,7 +131,7 @@ try {
     $installers = @(Get-ChildItem -LiteralPath $nsisDirectory -Filter "*.exe" -File)
     if ($installers.Count -ne 1) { throw "Genau ein NSIS-Installer erwartet; gefunden: $($installers.Count)." }
     $installer = $installers[0]
-    if ($installer.Name -cne "SNine Launcher_1.0.8_x64-setup.exe") { throw "Unerwarteter Installername: $($installer.Name)" }
+    if ($installer.Name -cne "SNine Launcher_1.0.10_x64-setup.exe") { throw "Unerwarteter Installername: $($installer.Name)" }
     $installerSignature = Get-AuthenticodeSignature -LiteralPath $installer.FullName
     if ($installerSignature.Status -ne [System.Management.Automation.SignatureStatus]::NotSigned) { throw "Diagnoseinstaller sollte NotSigned sein; Status: $($installerSignature.Status)" }
     $installerHash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash

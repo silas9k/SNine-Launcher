@@ -47,7 +47,12 @@ pub fn start() {
 
     RPC_ENABLED.store(config.enabled, Ordering::Relaxed);
 
-    if config.client_id.len() < 17 || !config.client_id.chars().all(|character| character.is_ascii_digit()) {
+    if config.client_id.len() < 17
+        || !config
+            .client_id
+            .chars()
+            .all(|character| character.is_ascii_digit())
+    {
         eprintln!(
             "[discord-rpc] Deaktiviert oder keine gültige Discord Application ID eingetragen."
         );

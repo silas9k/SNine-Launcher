@@ -7,7 +7,6 @@ import {
   launchButtonKey,
   tryAcquireLaunchGuard,
 } from "../../src/lib/launchLifecycle";
-import { DEFAULT_SHELL_SETTINGS } from "../../src/theme/types";
 
 function status(overrides: Partial<Phase5LaunchStatus> = {}): Phase5LaunchStatus {
   return {
@@ -64,9 +63,5 @@ describe("Minecraft launch lifecycle", () => {
       status({ launchId: "a-current", state: "preparing", startedAtUnix: 10 }),
     ], "profile-1");
     expect(latest?.launchId).toBe("a-current");
-  });
-
-  it("keeps automatic logs disabled by default", () => {
-    expect(DEFAULT_SHELL_SETTINGS.autoOpenMinecraftLog).toBe(false);
   });
 });

@@ -1,3 +1,4 @@
+import { useReleaseText } from "../../i18n/releaseUiText";
 import { Boxes, Flag, Home, Minus, Settings as SettingsIcon, Square, X, Shirt } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { IconButton } from "../ui";
@@ -10,6 +11,7 @@ function invokeWindow(command: string): void {
 }
 
 export function TitleBar() {
+  const rt = useReleaseText();
   const { t } = useI18n();
   const page = useShellStore((state) => state.page);
   const setPage = useShellStore((state) => state.setPage);
@@ -18,10 +20,10 @@ export function TitleBar() {
     <header className="shell-titlebar home-only-titlebar">
       <div className="home-only-titlebar__brand" data-tauri-drag-region>
         <span className="home-only-titlebar__logo"><BrandMark aria-hidden="true" /></span>
-        <div><strong>SNINE LAUNCHER</strong></div>
+        <div><strong>{rt("SNINE LAUNCHER")}</strong></div>
       </div>
 
-      <nav className="home-only-titlebar__tabs" aria-label="Launcher Navigation">
+      <nav className="home-only-titlebar__tabs" aria-label={rt("Launcher Navigation")}>
         <button type="button" className={page === "home" ? "is-active" : ""} onClick={() => setPage("home")}>
           <Home aria-hidden="true" />
           <span>{t("nav.home").toUpperCase()}</span>
@@ -36,11 +38,11 @@ export function TitleBar() {
         </button>
         <button type="button" className={page === "skins" ? "is-active" : ""} onClick={() => setPage("skins")}>
           <Shirt aria-hidden="true" />
-          <span>SKINS</span>
+          <span>{rt("SKINS")}</span>
         </button>
         <button type="button" className={page === "capes" ? "is-active" : ""} onClick={() => setPage("capes")}>
           <Flag aria-hidden="true" />
-          <span>CAPES</span>
+          <span>{rt("CAPES")}</span>
         </button>
       </nav>
 

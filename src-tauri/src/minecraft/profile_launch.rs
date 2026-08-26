@@ -116,9 +116,10 @@ impl ProfileProcessManager {
         validate_identifier(profile_id, "runtime_profile_id_invalid")?;
         self.cleanup_finished().await?;
         let mut pending = self.pending.lock().await;
-        if pending.values().any(|status| {
-            status.profile_id == profile_id && is_active_state(status.state)
-        }) {
+        if pending
+            .values()
+            .any(|status| status.profile_id == profile_id && is_active_state(status.state))
+        {
             return Err(AppError::coded("runtime_profile_already_launching"));
         }
         let running = self.running.lock().await;
@@ -269,13 +270,19 @@ impl ProfileProcessManager {
 
     pub async fn statuses(&self) -> AppResult<Vec<ProfileLaunchStatus>> {
         self.cleanup_finished().await?;
-        let mut statuses = self.pending.lock().await.values().cloned().collect::<Vec<_>>();
-        statuses.extend(self
-            .running
+        let mut statuses = self
+            .pending
             .lock()
             .await
             .values()
-            .map(|running| running.status.clone())
+            .cloned()
+            .collect::<Vec<_>>();
+        statuses.extend(
+            self.running
+                .lock()
+                .await
+                .values()
+                .map(|running| running.status.clone()),
         );
         statuses.extend(self.finished.lock().await.values().cloned());
         statuses.sort_by(|left, right| left.launch_id.cmp(&right.launch_id));
@@ -434,7 +441,8 @@ fn collect_finished_entries(
 }
 
 fn redact_launch_arguments(args: &[String]) -> Vec<String> {
-    const SENSITIVE_FLAGS: [&str; 4] = ["--accesstoken", "--clientid", "--xuid", "--userproperties"];
+    const SENSITIVE_FLAGS: [&str; 4] =
+        ["--accesstoken", "--clientid", "--xuid", "--userproperties"];
     let mut redact_next = false;
     args.iter()
         .map(|argument| {
@@ -451,7 +459,10 @@ fn redact_launch_arguments(args: &[String]) -> Vec<String> {
                 .iter()
                 .any(|flag| lower.starts_with(&format!("{flag}=")))
             {
-                return format!("{}=[REDACTED]", argument.split('=').next().unwrap_or("--secret"));
+                return format!(
+                    "{}=[REDACTED]",
+                    argument.split('=').next().unwrap_or("--secret")
+                );
             }
             argument.clone()
         })
@@ -851,7 +862,10 @@ fn prepare_native_cache(
     extract_native_archives(registry, paths, archives)?;
     let fingerprint = native_cache_fingerprint(lock, paths)?;
     let marker = paths.natives.absolute().join(NATIVE_CACHE_MARKER);
-    let temporary = paths.natives.absolute().join(format!("{NATIVE_CACHE_MARKER}.tmp"));
+    let temporary = paths
+        .natives
+        .absolute()
+        .join(format!("{NATIVE_CACHE_MARKER}.tmp"));
     fs::write(&temporary, fingerprint.as_bytes())?;
     if marker.exists() {
         fs::remove_file(&marker)?;
@@ -2199,15 +2213,19 @@ mod tests {
         let results = [one, two, three, four, five];
         assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
         assert_eq!(manager.pending.lock().await.len(), 1);
-        assert!(results.iter().filter_map(|result| result.as_ref().err()).all(|error| {
-            error.descriptor().code == "runtime_profile_already_launching"
-        }));
+        assert!(results
+            .iter()
+            .filter_map(|result| result.as_ref().err())
+            .all(|error| { error.descriptor().code == "runtime_profile_already_launching" }));
     }
 
     #[tokio::test]
     async fn failed_preparation_is_terminal_and_allows_retry() {
         let manager = ProfileProcessManager::default();
-        let first = manager.reserve("profile-retry", "Player").await.expect("reserve");
+        let first = manager
+            .reserve("profile-retry", "Player")
+            .await
+            .expect("reserve");
         manager
             .transition_pending(&first.launch_id, ProfileLaunchState::CheckingFiles)
             .await
@@ -2217,10 +2235,16 @@ mod tests {
             .await
             .expect("fail");
         assert_eq!(failed.state, ProfileLaunchState::Failed);
-        assert_eq!(failed.failure_code.as_deref(), Some("runtime_java_not_found"));
+        assert_eq!(
+            failed.failure_code.as_deref(),
+            Some("runtime_java_not_found")
+        );
         assert!(failed.finished_at_unix.is_some());
 
-        let retry = manager.reserve("profile-retry", "Player").await.expect("retry");
+        let retry = manager
+            .reserve("profile-retry", "Player")
+            .await
+            .expect("retry");
         assert_ne!(retry.launch_id, first.launch_id);
     }
 

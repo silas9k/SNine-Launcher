@@ -1,3 +1,4 @@
+import { useReleaseText } from "../../i18n/releaseUiText";
 import { Check, Download, LoaderCircle, Wrench, CircleX } from "lucide-react";
 
 export type InstallStep = {
@@ -7,11 +8,12 @@ export type InstallStep = {
 };
 
 export function InstallWizardCard({ steps }: { steps: InstallStep[] }) {
+  const rt = useReleaseText();
   return (
     <section className="snine-install-wizard snine-install-wizard--card">
       <header>
         <Wrench size={18} />
-        <strong>SNine Setup</strong>
+        <strong>{rt("SNine Setup")}</strong>
       </header>
 
       <div className="snine-install-wizard__steps">

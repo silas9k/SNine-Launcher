@@ -5,13 +5,13 @@ use crate::{
     foundation::CoreServices,
     minecraft::{
         instance_settings::{InstanceSettings, InstanceSettingsStore},
-        profile_sharing::ProfileSharingService,
         java_runtime::JavaRuntimeResolver,
         neoforge::inspect_verified_installer,
         profile_launch::{
             LaunchSecrets, ProfileLaunchRequest, ProfileLaunchState, ProfileLaunchStatus,
             ProfileProcessManager,
         },
+        profile_sharing::ProfileSharingService,
         resolver::{
             LaunchArgument, LaunchArgumentValue, LaunchRule, LoaderCatalogEntry,
             MinecraftCatalogEntry, ResolvedLoader, ResolvedMinecraftVersion, RuntimeArtifactKind,
@@ -104,7 +104,6 @@ pub struct Phase5RuntimeStatus {
     pub s9lab_component_capability: CapabilityStatus,
 }
 
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Phase5ProfileWorkspaceEntry {
@@ -191,7 +190,10 @@ impl MinecraftRuntimeService {
                 // every version document would be slow and unnecessary.
                 let resolved = self.resolver.resolve_mojang(version).await?;
                 (
-                    self.resolver.fabric_catalog(version).await.unwrap_or_default(),
+                    self.resolver
+                        .fabric_catalog(version)
+                        .await
+                        .unwrap_or_default(),
                     Some(
                         u16::try_from(resolved.java_major)
                             .map_err(|_| AppError::coded("runtime_java_major_unsupported"))?,
@@ -213,7 +215,9 @@ impl MinecraftRuntimeService {
     }
 
     fn load_version_catalog_cache(&self) -> AppResult<Option<Vec<MinecraftCatalogEntry>>> {
-        let path = self.registry.resolve("cache", "minecraft-version-catalog.json")?;
+        let path = self
+            .registry
+            .resolve("cache", "minecraft-version-catalog.json")?;
         if !path.absolute().is_file() {
             return Ok(None);
         }
@@ -222,11 +226,13 @@ impl MinecraftRuntimeService {
         if metadata.len() == 0 || metadata.len() > 2 * 1024 * 1024 {
             return Ok(None);
         }
-        let cache: PersistedVersionCatalog = match serde_json::from_slice(&fs::read(path.absolute())?) {
-            Ok(cache) => cache,
-            Err(_) => return Ok(None),
-        };
-        if Utc::now().timestamp().saturating_sub(cache.cached_at_unix) > VERSION_CATALOG_CACHE_SECONDS
+        let cache: PersistedVersionCatalog =
+            match serde_json::from_slice(&fs::read(path.absolute())?) {
+                Ok(cache) => cache,
+                Err(_) => return Ok(None),
+            };
+        if Utc::now().timestamp().saturating_sub(cache.cached_at_unix)
+            > VERSION_CATALOG_CACHE_SECONDS
             || cache.entries.is_empty()
         {
             return Ok(None);
@@ -235,8 +241,12 @@ impl MinecraftRuntimeService {
     }
 
     fn save_version_catalog_cache(&self, entries: &[MinecraftCatalogEntry]) -> AppResult<()> {
-        let path = self.registry.resolve("cache", "minecraft-version-catalog.json")?;
-        let temporary = self.registry.resolve("cache", "minecraft-version-catalog.json.part")?;
+        let path = self
+            .registry
+            .resolve("cache", "minecraft-version-catalog.json")?;
+        let temporary = self
+            .registry
+            .resolve("cache", "minecraft-version-catalog.json.part")?;
         let document = PersistedVersionCatalog {
             cached_at_unix: Utc::now().timestamp(),
             entries: entries.to_vec(),
@@ -303,17 +313,34 @@ impl MinecraftRuntimeService {
         let launches = self.launch_statuses().await?;
         let running_profile_ids = launches
             .iter()
-            .filter(|launch| matches!(launch.state, ProfileLaunchState::Preparing | ProfileLaunchState::CheckingFiles | ProfileLaunchState::Downloading | ProfileLaunchState::Starting | ProfileLaunchState::Running | ProfileLaunchState::Stopping))
+            .filter(|launch| {
+                matches!(
+                    launch.state,
+                    ProfileLaunchState::Preparing
+                        | ProfileLaunchState::CheckingFiles
+                        | ProfileLaunchState::Downloading
+                        | ProfileLaunchState::Starting
+                        | ProfileLaunchState::Running
+                        | ProfileLaunchState::Stopping
+                )
+            })
             .map(|launch| launch.profile_id.clone())
             .collect::<Vec<_>>();
         ProfileSharingService::new(self.registry.clone(), self.storage.clone())
             .sync_servers_to_inactive_profiles(&running_profile_ids)?;
         let settings_store = InstanceSettingsStore::new(self.registry.clone());
         let mut entries = Vec::with_capacity(profiles.len());
-        for profile in profiles.into_iter().filter(|profile| profile.lifecycle_state == "active") {
+        for profile in profiles
+            .into_iter()
+            .filter(|profile| profile.lifecycle_state == "active")
+        {
             let runtime = self.status_with_launches(&profile.id, &launches)?;
             let settings = settings_store.load(&profile.id)?;
-            entries.push(Phase5ProfileWorkspaceEntry { profile, runtime, settings });
+            entries.push(Phase5ProfileWorkspaceEntry {
+                profile,
+                runtime,
+                settings,
+            });
         }
         Ok(Phase5ProfilesWorkspace { entries, launches })
     }
@@ -342,7 +369,12 @@ impl MinecraftRuntimeService {
                     let projected_component = projection
                         .component_id
                         .zip(projection.component_version)
-                        .map(|(component_id, component_version)| InstalledComponentSummary { component_id, component_version });
+                        .map(
+                            |(component_id, component_version)| InstalledComponentSummary {
+                                component_id,
+                                component_version,
+                            },
+                        );
                     let install_state = if projection.revision_id != active_revision_id
                         || projected_component != component
                     {
@@ -488,7 +520,8 @@ impl MinecraftRuntimeService {
             .as_deref()
             .ok_or_else(|| AppError::coded("profile_active_revision_missing"))?;
         let step = std::time::Instant::now();
-        let launch = self.processes
+        let launch = self
+            .processes
             .launch(
                 &self.registry,
                 ProfileLaunchRequest {
@@ -609,8 +642,8 @@ impl MinecraftRuntimeService {
         let storage = self.storage.clone();
         let profile_id = status.profile_id.clone();
         let _ = tokio::task::spawn_blocking(move || {
-            if let Err(error) = ProfileSharingService::new(registry, storage)
-                .sync_finished_profile(&profile_id)
+            if let Err(error) =
+                ProfileSharingService::new(registry, storage).sync_finished_profile(&profile_id)
             {
                 eprintln!("[SNine Launcher] shared profile data sync failed: {error}");
             }

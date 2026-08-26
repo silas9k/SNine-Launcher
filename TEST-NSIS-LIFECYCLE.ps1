@@ -82,7 +82,7 @@ try {
     }
     $secondBinaryHash = (Get-FileHash -LiteralPath $installedBinary -Algorithm SHA256).Hash
     if ($secondBinaryHash -ne $firstBinaryHash) {
-        throw "Der identische 1.0.8-Wartungslauf erzeugte ein abweichendes Hauptprogramm."
+        throw "Der identische 1.0.10-Wartungslauf erzeugte ein abweichendes Hauptprogramm."
     }
 
     Invoke-HiddenProcess -FilePath $uninstaller -ArgumentList @("/S", "/CurrentUser", "_?=$installRoot") -Label "Isolierte NSIS-Deinstallation"
@@ -96,7 +96,7 @@ try {
     if (Test-Path -LiteralPath $currentUserKey) {
         throw "Die Deinstallation hat den CurrentUser-Uninstall-Eintrag nicht entfernt."
     }
-    Write-Host "NSIS-Lifecycle bestanden: isolierte Installation, identischer 1.0.8-In-place-Wartungspfad und Deinstallation." -ForegroundColor Green
+    Write-Host "NSIS-Lifecycle bestanden: isolierte Installation, identischer 1.0.10-In-place-Wartungspfad und Deinstallation." -ForegroundColor Green
 }
 finally {
     if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {

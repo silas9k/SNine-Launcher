@@ -44,8 +44,12 @@ export function I18nProvider({ localeSetting, children }: { localeSetting: Local
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
+export function useOptionalI18n(): I18nValue | null {
+  return useContext(I18nContext);
+}
+
 export function useI18n(): I18nValue {
-  const value = useContext(I18nContext);
+  const value = useOptionalI18n();
   if (!value) throw new Error("I18nProvider missing");
   return value;
 }

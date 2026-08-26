@@ -1,6 +1,9 @@
 use crate::foundation::CoreServices;
 use futures_util::StreamExt;
-use reqwest::header::{ACCEPT, ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, ETAG, LAST_MODIFIED, RANGE};
+use reqwest::header::{
+    ACCEPT, ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, ETAG, LAST_MODIFIED,
+    RANGE,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -97,7 +100,6 @@ struct PersistedClientMetadata {
     downloaded_at_unix: i64,
 }
 
-
 #[derive(Debug, Clone, Copy)]
 struct CompanionModSpec {
     project_slug: &'static str,
@@ -181,7 +183,10 @@ fn fast_probe_client() -> Result<reqwest::Client, String> {
         .map_err(|error| format!("snine_update_http_client_failed:{error}"))
 }
 
-pub(crate) fn target_paths(core: &CoreServices, profile_id: &str) -> Result<(PathBuf, PathBuf, PathBuf), String> {
+pub(crate) fn target_paths(
+    core: &CoreServices,
+    profile_id: &str,
+) -> Result<(PathBuf, PathBuf, PathBuf), String> {
     let profile_id = validate_profile_id(profile_id)?;
     let mods = core
         .registry()
@@ -189,12 +194,25 @@ pub(crate) fn target_paths(core: &CoreServices, profile_id: &str) -> Result<(Pat
         .map_err(|error| format!("snine_update_mods_path_failed:{}", error.descriptor().code))?;
     let target = core
         .registry()
-        .resolve("profiles", format!("{profile_id}/instance/mods/snineclient.jar"))
-        .map_err(|error| format!("snine_update_target_path_failed:{}", error.descriptor().code))?;
+        .resolve(
+            "profiles",
+            format!("{profile_id}/instance/mods/snineclient.jar"),
+        )
+        .map_err(|error| {
+            format!(
+                "snine_update_target_path_failed:{}",
+                error.descriptor().code
+            )
+        })?;
     let metadata = core
         .registry()
         .resolve("data", format!("snine-client-update-{profile_id}.json"))
-        .map_err(|error| format!("snine_update_metadata_path_failed:{}", error.descriptor().code))?;
+        .map_err(|error| {
+            format!(
+                "snine_update_metadata_path_failed:{}",
+                error.descriptor().code
+            )
+        })?;
     Ok((
         mods.absolute().to_path_buf(),
         target.absolute().to_path_buf(),
@@ -378,7 +396,10 @@ async fn probe_remote(client: &reqwest::Client) -> Result<RemoteMetadata, String
             Err(error) => errors.push(format!("{url}:{error}")),
         }
     }
-    Err(format!("snine_update_remote_unreachable:{}", errors.join("|")))
+    Err(format!(
+        "snine_update_remote_unreachable:{}",
+        errors.join("|")
+    ))
 }
 
 async fn open_download_response(client: &reqwest::Client) -> Result<reqwest::Response, String> {
@@ -387,7 +408,10 @@ async fn open_download_response(client: &reqwest::Client) -> Result<reqwest::Res
         for attempt in 0..2u64 {
             match client
                 .get(url)
-                .header(ACCEPT, "application/java-archive, application/octet-stream, */*")
+                .header(
+                    ACCEPT,
+                    "application/java-archive, application/octet-stream, */*",
+                )
                 .header(ACCEPT_ENCODING, "identity")
                 .header(CACHE_CONTROL, "no-cache")
                 .send()
@@ -395,7 +419,8 @@ async fn open_download_response(client: &reqwest::Client) -> Result<reqwest::Res
             {
                 Ok(response) if response.status().is_success() => return Ok(response),
                 Ok(response) => {
-                    last_error = format!("snine_update_download_http_{}", response.status().as_u16())
+                    last_error =
+                        format!("snine_update_download_http_{}", response.status().as_u16())
                 }
                 Err(error) => last_error = format!("snine_update_download_failed:{error}"),
             }
@@ -446,7 +471,13 @@ async fn download_with_windows_curl(
                 Ok(Some(status)) => {
                     if status.success() {
                         let (sha256, downloaded) = hash_file(temporary)?;
-                        emit_progress(app, profile_id, downloaded, total_bytes.or(Some(downloaded)), "downloading");
+                        emit_progress(
+                            app,
+                            profile_id,
+                            downloaded,
+                            total_bytes.or(Some(downloaded)),
+                            "downloading",
+                        );
                         return Ok((downloaded, sha256));
                     }
                     last_error = format!("snine_update_curl_exit_{}", status.code().unwrap_or(-1));
@@ -571,8 +602,8 @@ fn write_metadata(path: &Path, metadata: &PersistedClientMetadata) -> Result<(),
 }
 
 fn hash_file(path: &Path) -> Result<(String, u64), String> {
-    let mut file = File::open(path)
-        .map_err(|error| format!("snine_update_local_open_failed:{error}"))?;
+    let mut file =
+        File::open(path).map_err(|error| format!("snine_update_local_open_failed:{error}"))?;
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 64 * 1024];
     let mut total = 0u64;
@@ -590,10 +621,9 @@ fn hash_file(path: &Path) -> Result<(String, u64), String> {
 }
 
 fn inspect_snine_jar(path: &Path) -> Result<Option<String>, String> {
-    let file = File::open(path)
-        .map_err(|error| format!("snine_client_jar_open_failed:{error}"))?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|error| format!("snine_client_jar_invalid:{error}"))?;
+    let file = File::open(path).map_err(|error| format!("snine_client_jar_open_failed:{error}"))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|error| format!("snine_client_jar_invalid:{error}"))?;
     let mut entry = archive
         .by_name("fabric.mod.json")
         .map_err(|_| "snine_client_fabric_metadata_missing".to_string())?;
@@ -617,7 +647,9 @@ fn inspect_snine_jar(path: &Path) -> Result<Option<String>, String> {
         .and_then(Value::as_str)
     {
         if !minecraft.contains("1.21.11") {
-            return Err(format!("snine_client_minecraft_version_invalid:{minecraft}"));
+            return Err(format!(
+                "snine_client_minecraft_version_invalid:{minecraft}"
+            ));
         }
     }
 
@@ -689,10 +721,8 @@ fn metadata_changed(remote: &RemoteMetadata, local: &PersistedClientMetadata) ->
     false
 }
 
-
 fn inspect_generic_fabric_jar(path: &Path) -> Result<(String, Option<String>), String> {
-    let file = File::open(path)
-        .map_err(|error| format!("fabric_mod_open_failed:{error}"))?;
+    let file = File::open(path).map_err(|error| format!("fabric_mod_open_failed:{error}"))?;
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|error| format!("fabric_mod_archive_invalid:{error}"))?;
     let mut entry = archive
@@ -811,7 +841,12 @@ async fn resolve_companion_download(
         .header(ACCEPT, "application/json")
         .send()
         .await
-        .map_err(|error| format!("snine_support_{}_version_lookup_failed:{error}", spec.mod_id))?;
+        .map_err(|error| {
+            format!(
+                "snine_support_{}_version_lookup_failed:{error}",
+                spec.mod_id
+            )
+        })?;
     if !response.status().is_success() {
         return Err(format!(
             "snine_support_{}_version_http_{}",
@@ -863,7 +898,10 @@ async fn download_companion_mod(
     emit_progress(app, profile_id, 0, resolved.size_hint, "dependencies");
     let response = client
         .get(&resolved.download_url)
-        .header(ACCEPT, "application/java-archive, application/octet-stream, */*")
+        .header(
+            ACCEPT,
+            "application/java-archive, application/octet-stream, */*",
+        )
         .send()
         .await
         .map_err(|error| format!("snine_support_{}_download_failed:{error}", spec.mod_id))?;
@@ -881,7 +919,8 @@ async fn download_companion_mod(
     let mut stream = response.bytes_stream();
     let mut downloaded = 0u64;
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|error| format!("snine_support_{}_stream_failed:{error}", spec.mod_id))?;
+        let chunk = chunk
+            .map_err(|error| format!("snine_support_{}_stream_failed:{error}", spec.mod_id))?;
         downloaded = downloaded.saturating_add(chunk.len() as u64);
         if downloaded > COMPANION_MOD_MAX_BYTES {
             return Err(format!("snine_support_{}_download_too_large", spec.mod_id));
@@ -889,7 +928,13 @@ async fn download_companion_mod(
         file.write_all(&chunk)
             .await
             .map_err(|error| format!("snine_support_{}_temp_write_failed:{error}", spec.mod_id))?;
-        emit_progress(app, profile_id, downloaded, resolved.size_hint, "dependencies");
+        emit_progress(
+            app,
+            profile_id,
+            downloaded,
+            resolved.size_hint,
+            "dependencies",
+        );
     }
     file.flush()
         .await
@@ -900,16 +945,17 @@ async fn download_companion_mod(
         .map_err(|error| format!("snine_support_{}_invalid_jar:{error}", spec.mod_id))?;
     if !mod_id.eq_ignore_ascii_case(spec.mod_id) {
         let _ = fs::remove_file(&temporary);
-        return Err(format!("snine_support_{}_mod_id_invalid:{mod_id}", spec.mod_id));
+        return Err(format!(
+            "snine_support_{}_mod_id_invalid:{mod_id}",
+            spec.mod_id
+        ));
     }
     remove_duplicate_mod_jars(mods_dir, &target, spec.mod_id);
     fs::rename(&temporary, &target)
         .map_err(|error| format!("snine_support_{}_commit_failed:{error}", spec.mod_id))?;
     eprintln!(
         "[snine-client-updater] installed companion mod {} {} for profile {}",
-        spec.display_name,
-        resolved.version,
-        profile_id
+        spec.display_name, resolved.version, profile_id
     );
     Ok(())
 }
@@ -975,8 +1021,13 @@ fn build_update_check(
         // decides whether a newer distribution exists. Full SHA-256 validation
         // still happens while downloading/committing a new jar.
         if external_client_installed {
-            let current_size = fs::metadata(target).ok().filter(|m| m.is_file()).map(|m| m.len());
-            if current_size != local.size_bytes || installed_version.as_deref() != local.installed_version.as_deref() {
+            let current_size = fs::metadata(target)
+                .ok()
+                .filter(|m| m.is_file())
+                .map(|m| m.len());
+            if current_size != local.size_bytes
+                || installed_version.as_deref() != local.installed_version.as_deref()
+            {
                 update_available = true;
             }
         }
@@ -992,7 +1043,12 @@ fn build_update_check(
         installed_version,
         remote_version: remote.version,
         remote_size_bytes: remote.size_bytes,
-        status_message: if update_available { "update_available" } else { "client_current" }.into(),
+        status_message: if update_available {
+            "update_available"
+        } else {
+            "client_current"
+        }
+        .into(),
     }
 }
 
@@ -1090,7 +1146,9 @@ async fn download_update_impl(
                 return Ok(SnineClientDownloadResult {
                     installed_version,
                     sha256: metadata.sha256,
-                    size_bytes: metadata.size_bytes.unwrap_or_else(|| fs::metadata(&target).map(|m| m.len()).unwrap_or(0)),
+                    size_bytes: metadata
+                        .size_bytes
+                        .unwrap_or_else(|| fs::metadata(&target).map(|m| m.len()).unwrap_or(0)),
                     target_file: target.to_string_lossy().into_owned(),
                 });
             }
@@ -1177,7 +1235,9 @@ async fn download_update_locked_impl(
         match candidate {
             Ok((downloaded, sha256)) => {
                 if downloaded == 0 || downloaded > MAX_CLIENT_JAR_BYTES {
-                    failures.push(format!("{source}:snine_update_download_size_invalid:{downloaded}"));
+                    failures.push(format!(
+                        "{source}:snine_update_download_size_invalid:{downloaded}"
+                    ));
                     return false;
                 }
                 // A proxy/CDN can return an HTML body with HTTP 200. Validate the
@@ -1205,10 +1265,13 @@ async fn download_update_locked_impl(
 
     if !accept_candidate("reqwest", reqwest_result) {
         eprintln!("[snine-client-updater] reqwest candidate rejected; trying curl.exe");
-        let curl = download_with_windows_curl(app, &profile_id, &temporary, remote.size_bytes).await;
+        let curl =
+            download_with_windows_curl(app, &profile_id, &temporary, remote.size_bytes).await;
         if !accept_candidate("curl", curl) {
             eprintln!("[snine-client-updater] curl candidate rejected; trying Windows PowerShell WebClient");
-            let powershell = download_with_windows_powershell(app, &profile_id, &temporary, remote.size_bytes).await;
+            let powershell =
+                download_with_windows_powershell(app, &profile_id, &temporary, remote.size_bytes)
+                    .await;
             let _ = accept_candidate("powershell", powershell);
         }
     }
@@ -1288,8 +1351,10 @@ pub async fn snine_client_download_update(
     download_update_impl(&app, core.inner(), &profile_id).await
 }
 
-
-pub fn verify_client_ready(core: &CoreServices, profile_id: &str) -> Result<Option<String>, String> {
+pub fn verify_client_ready(
+    core: &CoreServices,
+    profile_id: &str,
+) -> Result<Option<String>, String> {
     let (_, target, metadata_path) = target_paths(core, profile_id)?;
     if !target.is_file() {
         return Err("snine_client_missing_after_update".into());

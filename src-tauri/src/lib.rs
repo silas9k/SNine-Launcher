@@ -12,10 +12,8 @@ pub mod download;
 pub mod error;
 pub mod foundation;
 pub mod ipc;
-mod logging;
 mod launcher_font;
-mod snine_bridge;
-mod snine_client_delivery;
+mod logging;
 mod minecraft;
 pub mod modrinth;
 pub mod operations;
@@ -24,6 +22,8 @@ pub mod profile_format;
 pub mod profiles;
 pub mod runtime;
 pub mod security;
+mod snine_bridge;
+mod snine_client_delivery;
 pub mod storage;
 pub mod updates;
 mod window_commands;
@@ -32,6 +32,7 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let core = foundation::CoreServices::open_system()?;

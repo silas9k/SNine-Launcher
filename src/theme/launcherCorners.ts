@@ -1,3 +1,4 @@
+import { uiStorage } from "../lib/uiStorage";
 export const DEFAULT_LAUNCHER_CORNER_RADIUS = 10;
 export const MIN_LAUNCHER_CORNER_RADIUS = 0;
 export const MAX_LAUNCHER_CORNER_RADIUS = 24;
@@ -19,7 +20,7 @@ function setLauncherCornerRadius(radius: number) {
 
 export function loadLauncherCornerRadius() {
   try {
-    return normalizeLauncherCornerRadius(window.localStorage.getItem(STORAGE_KEY));
+    return normalizeLauncherCornerRadius(uiStorage.getItem(STORAGE_KEY));
   } catch {
     return DEFAULT_LAUNCHER_CORNER_RADIUS;
   }
@@ -34,7 +35,7 @@ export function applyLauncherCornerRadius(value = loadLauncherCornerRadius()) {
 export function saveLauncherCornerRadius(value: number) {
   const radius = normalizeLauncherCornerRadius(value);
   try {
-    window.localStorage.setItem(STORAGE_KEY, String(radius));
+    uiStorage.setItem(STORAGE_KEY, String(radius));
   } catch {
     // Keep live preference even without persistence.
   }
@@ -44,7 +45,7 @@ export function saveLauncherCornerRadius(value: number) {
 
 export function resetLauncherCornerRadius() {
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    uiStorage.removeItem(STORAGE_KEY);
   } catch {
     // Ignore storage errors and still restore the default.
   }

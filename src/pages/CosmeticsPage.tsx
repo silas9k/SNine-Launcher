@@ -1,3 +1,4 @@
+import { useReleaseText } from "../i18n/releaseUiText";
 import { useCallback, useEffect, useState } from "react";
 import { ChevronRight, CircleUserRound, Layers3, RefreshCw, Sparkles, Wifi, WifiOff } from "lucide-react";
 import { authCommands } from "../lib/authCommands";
@@ -27,6 +28,7 @@ function isSnapshotSource(source: string): boolean {
 }
 
 export function CosmeticsPage() {
+  const rt = useReleaseText();
   const { t } = useI18n();
   const [account, setAccount] = useState<Phase3Account | null>(null);
   const [snapshot, setSnapshot] = useState<LauncherCosmeticSnapshot>(EMPTY);
@@ -67,22 +69,22 @@ export function CosmeticsPage() {
     <div className="page snine-prism-cosmetics-page">
       <header className="snine-prism-pagehead">
         <div>
-          <span><Sparkles aria-hidden="true" /> SNINE // LOADOUT</span>
-          <h1>COSMETICS</h1>
-          <p>Dein ausgerüsteter SNine-Look. Live vom Backend, mit lokalem Snapshot-Fallback wenn die Verbindung fehlt.</p>
+          <span><Sparkles aria-hidden="true" /> {rt("SNINE // LOADOUT")}</span>
+          <h1>{rt("COSMETICS")}</h1>
+          <p>{rt("Dein ausgerüsteter SNine-Look. Live vom Backend, mit lokalem Snapshot-Fallback wenn die Verbindung fehlt.")}</p>
         </div>
         <button type="button" onClick={() => void sync()} disabled={loading || !account} title={snapshot.statusMessage}>
-          <RefreshCw className={loading ? "ui-spin" : ""} aria-hidden="true" /> SYNC NOW
+          <RefreshCw className={loading ? "ui-spin" : ""} aria-hidden="true" /> {rt("SYNC NOW")}
         </button>
       </header>
 
       <section className="snine-prism-cosmetics-summary">
-        <div><CircleUserRound aria-hidden="true" /><span><small>PLAYER</small><strong>{account?.username ?? "NO ACCOUNT"}</strong></span></div>
-        <div className={snapshot.online ? "is-live" : ""}><NetworkIcon aria-hidden="true" /><span><small>DATA SOURCE</small><strong>{statusLabel}</strong></span></div>
-        <div><Layers3 aria-hidden="true" /><span><small>EQUIPPED</small><strong>{String(snapshot.equipped.length).padStart(2, "0")}</strong></span></div>
+        <div><CircleUserRound aria-hidden="true" /><span><small>{rt("PLAYER")}</small><strong>{account?.username ?? "NO ACCOUNT"}</strong></span></div>
+        <div className={snapshot.online ? "is-live" : ""}><NetworkIcon aria-hidden="true" /><span><small>{rt("DATA SOURCE")}</small><strong>{statusLabel}</strong></span></div>
+        <div><Layers3 aria-hidden="true" /><span><small>{rt("EQUIPPED")}</small><strong>{String(snapshot.equipped.length).padStart(2, "0")}</strong></span></div>
       </section>
 
-      <section className="snine-prism-cosmetics-grid" aria-label="Equipped cosmetics">
+      <section className="snine-prism-cosmetics-grid" aria-label={rt("Equipped cosmetics")}>
         {previewAsset ? (
           <div className="snine-prism-cosmetics-empty" role="status">
             <Sparkles aria-hidden="true" />
@@ -91,7 +93,7 @@ export function CosmeticsPage() {
           </div>
         ) : null}
         {loading ? (
-          <div className="snine-prism-cosmetics-empty"><RefreshCw className="ui-spin" aria-hidden="true" /><strong>LOADOUT SYNC</strong><span>IDs, Modelle und Texturen werden geladen.</span></div>
+          <div className="snine-prism-cosmetics-empty"><RefreshCw className="ui-spin" aria-hidden="true" /><strong>{rt("LOADOUT SYNC")}</strong><span>{rt("IDs, Modelle und Texturen werden geladen.")}</span></div>
         ) : snapshot.equipped.length ? snapshot.equipped.map((item, index) => (
           <article className="snine-prism-cosmetic-card" key={`${item.kind}:${item.id}`}>
             <div className="snine-prism-cosmetic-card__index">{String(index + 1).padStart(2, "0")}</div>
@@ -103,11 +105,11 @@ export function CosmeticsPage() {
               <h2>{item.name || item.id}</h2>
               <code>{item.id}</code>
             </div>
-            <span className="snine-prism-cosmetic-card__render"><i /> PLAYER RENDER</span>
+            <span className="snine-prism-cosmetic-card__render"><i /> {rt("PLAYER RENDER")}</span>
             <ChevronRight aria-hidden="true" />
           </article>
         )) : (
-          <div className="snine-prism-cosmetics-empty"><Sparkles aria-hidden="true" /><strong>NO LOADOUT</strong><span>{snapshot.statusMessage.replaceAll("_", " ")}</span></div>
+          <div className="snine-prism-cosmetics-empty"><Sparkles aria-hidden="true" /><strong>{rt("NO LOADOUT")}</strong><span>{snapshot.statusMessage.replaceAll("_", " ")}</span></div>
         )}
       </section>
     </div>

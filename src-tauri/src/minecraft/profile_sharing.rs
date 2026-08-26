@@ -56,7 +56,11 @@ impl ProfileSharingService {
         Self { registry, storage }
     }
 
-    pub fn prepare_for_launch(&self, profile_id: &str, settings: &InstanceSettings) -> AppResult<()> {
+    pub fn prepare_for_launch(
+        &self,
+        profile_id: &str,
+        settings: &InstanceSettings,
+    ) -> AppResult<()> {
         self.ensure_layout()?;
         self.ingest_last_launch()?;
         self.ensure_global_servers_seeded()?;
@@ -136,7 +140,10 @@ impl ProfileSharingService {
         if settings.share_options {
             self.ingest_shared_file(profile_id, "options", "options.txt", "options.txt")?;
         }
-        if self.load_last_launch()?.is_some_and(|last| last.profile_id == profile_id) {
+        if self
+            .load_last_launch()?
+            .is_some_and(|last| last.profile_id == profile_id)
+        {
             self.clear_last_launch()?;
         }
         Ok(())
@@ -148,7 +155,10 @@ impl ProfileSharingService {
         self.materialize_shared_file(profile_id, "servers", "servers.dat", "servers.dat")
     }
 
-    pub fn sync_servers_to_inactive_profiles(&self, running_profile_ids: &[String]) -> AppResult<()> {
+    pub fn sync_servers_to_inactive_profiles(
+        &self,
+        running_profile_ids: &[String],
+    ) -> AppResult<()> {
         self.ensure_layout()?;
 
         // If the launcher was closed before the previous process-exit callback ran,
@@ -160,7 +170,10 @@ impl ProfileSharingService {
         // not running, its servers.dat is authoritative. This also picks up manual
         // edits made outside Minecraft without requiring a launch first.
         if let Some(standard_profile_id) = self.standard_profile_id()? {
-            if !running_profile_ids.iter().any(|id| id == &standard_profile_id) {
+            if !running_profile_ids
+                .iter()
+                .any(|id| id == &standard_profile_id)
+            {
                 self.ingest_shared_file(
                     &standard_profile_id,
                     "servers",
@@ -221,7 +234,9 @@ impl ProfileSharingService {
     }
 
     fn ingest_last_launch_if_inactive(&self, running_profile_ids: &[String]) -> AppResult<()> {
-        let Some(last) = self.load_last_launch()? else { return Ok(()); };
+        let Some(last) = self.load_last_launch()? else {
+            return Ok(());
+        };
         if running_profile_ids.iter().any(|id| id == &last.profile_id) {
             return Ok(());
         }
@@ -287,7 +302,12 @@ impl ProfileSharingService {
         Ok(())
     }
 
-    fn ensure_shared_file_seeded(&self, _kind: &str, shared_name: &str, profile_name: &str) -> AppResult<()> {
+    fn ensure_shared_file_seeded(
+        &self,
+        _kind: &str,
+        shared_name: &str,
+        profile_name: &str,
+    ) -> AppResult<()> {
         let target = self.shared_file(shared_name)?;
         if target.is_file() {
             return Ok(());
@@ -365,7 +385,12 @@ impl ProfileSharingService {
         self.save_file_baseline(profile_id, kind, stamp_for_file(&target)?)
     }
 
-    fn materialize_shared_directory(&self, profile_id: &str, kind: &str, profile_name: &str) -> AppResult<()> {
+    fn materialize_shared_directory(
+        &self,
+        profile_id: &str,
+        kind: &str,
+        profile_name: &str,
+    ) -> AppResult<()> {
         let source = self.shared_directory(kind)?;
         let target = self.profile_path(profile_id, profile_name)?;
         fs::create_dir_all(&source)?;
@@ -390,7 +415,12 @@ impl ProfileSharingService {
         self.save_directory_baseline(profile_id, kind, &DirectoryBaseline { files: canonical })
     }
 
-    fn ingest_shared_directory(&self, profile_id: &str, kind: &str, profile_name: &str) -> AppResult<()> {
+    fn ingest_shared_directory(
+        &self,
+        profile_id: &str,
+        kind: &str,
+        profile_name: &str,
+    ) -> AppResult<()> {
         let source = self.profile_path(profile_id, profile_name)?;
         let target = self.shared_directory(kind)?;
         fs::create_dir_all(&source)?;
@@ -439,7 +469,10 @@ impl ProfileSharingService {
     fn shared_directory_manifest_path(&self, kind: &str) -> AppResult<PathBuf> {
         Ok(self
             .registry
-            .resolve("data", format!("{SHARED_ROOT}/manifests/_shared-{kind}.json"))?
+            .resolve(
+                "data",
+                format!("{SHARED_ROOT}/manifests/_shared-{kind}.json"),
+            )?
             .absolute()
             .to_path_buf())
     }
@@ -447,7 +480,10 @@ impl ProfileSharingService {
     fn shared_directory_dirty_path(&self, kind: &str) -> AppResult<PathBuf> {
         Ok(self
             .registry
-            .resolve("data", format!("{SHARED_ROOT}/manifests/_shared-{kind}.dirty"))?
+            .resolve(
+                "data",
+                format!("{SHARED_ROOT}/manifests/_shared-{kind}.dirty"),
+            )?
             .absolute()
             .to_path_buf())
     }
@@ -463,7 +499,11 @@ impl ProfileSharingService {
         Ok(Some(value))
     }
 
-    fn save_shared_directory_manifest(&self, kind: &str, value: &DirectoryBaseline) -> AppResult<()> {
+    fn save_shared_directory_manifest(
+        &self,
+        kind: &str,
+        value: &DirectoryBaseline,
+    ) -> AppResult<()> {
         atomic_json_write(&self.shared_directory_manifest_path(kind)?, value)
     }
 
@@ -475,7 +515,12 @@ impl ProfileSharingService {
             }
         }
         let files = scan_tree(&self.shared_directory(kind)?)?;
-        self.save_shared_directory_manifest(kind, &DirectoryBaseline { files: files.clone() })?;
+        self.save_shared_directory_manifest(
+            kind,
+            &DirectoryBaseline {
+                files: files.clone(),
+            },
+        )?;
         if dirty.is_file() {
             fs::remove_file(dirty)?;
         }
@@ -486,7 +531,10 @@ impl ProfileSharingService {
         validate_profile_id(profile_id)?;
         Ok(self
             .registry
-            .resolve("profiles", Path::new(profile_id).join("instance").join(relative))?
+            .resolve(
+                "profiles",
+                Path::new(profile_id).join("instance").join(relative),
+            )?
             .absolute()
             .to_path_buf())
     }
@@ -495,21 +543,34 @@ impl ProfileSharingService {
         validate_profile_id(profile_id)?;
         Ok(self
             .registry
-            .resolve("data", format!("{SHARED_ROOT}/manifests/{profile_id}-{kind}.json"))?
+            .resolve(
+                "data",
+                format!("{SHARED_ROOT}/manifests/{profile_id}-{kind}.json"),
+            )?
             .absolute()
             .to_path_buf())
     }
 
-    fn load_directory_baseline(&self, profile_id: &str, kind: &str) -> AppResult<DirectoryBaseline> {
+    fn load_directory_baseline(
+        &self,
+        profile_id: &str,
+        kind: &str,
+    ) -> AppResult<DirectoryBaseline> {
         let path = self.baseline_path(profile_id, kind)?;
         if !path.is_file() {
             return Ok(DirectoryBaseline::default());
         }
         let bytes = fs::read(path)?;
-        serde_json::from_slice(&bytes).map_err(|_| AppError::coded("shared_profile_manifest_invalid"))
+        serde_json::from_slice(&bytes)
+            .map_err(|_| AppError::coded("shared_profile_manifest_invalid"))
     }
 
-    fn save_directory_baseline(&self, profile_id: &str, kind: &str, value: &DirectoryBaseline) -> AppResult<()> {
+    fn save_directory_baseline(
+        &self,
+        profile_id: &str,
+        kind: &str,
+        value: &DirectoryBaseline,
+    ) -> AppResult<()> {
         atomic_json_write(&self.baseline_path(profile_id, kind)?, value)
     }
 
@@ -524,8 +585,16 @@ impl ProfileSharingService {
         Ok(value.stamp)
     }
 
-    fn save_file_baseline(&self, profile_id: &str, kind: &str, stamp: Option<FileStamp>) -> AppResult<()> {
-        atomic_json_write(&self.baseline_path(profile_id, kind)?, &FileBaseline { stamp })
+    fn save_file_baseline(
+        &self,
+        profile_id: &str,
+        kind: &str,
+        stamp: Option<FileStamp>,
+    ) -> AppResult<()> {
+        atomic_json_write(
+            &self.baseline_path(profile_id, kind)?,
+            &FileBaseline { stamp },
+        )
     }
 
     fn last_launch_path(&self) -> AppResult<PathBuf> {

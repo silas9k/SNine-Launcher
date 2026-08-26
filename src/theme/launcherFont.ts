@@ -1,3 +1,4 @@
+import { uiStorage } from "../lib/uiStorage";
 import { invoke } from "@tauri-apps/api/core";
 
 export type LauncherFontChoice = "minecraft" | "launcher";
@@ -20,7 +21,7 @@ export function normalizeLauncherFont(value: string | null | undefined): Launche
 
 export function loadLauncherFont(): LauncherFontChoice {
   try {
-    return normalizeLauncherFont(window.localStorage.getItem(STORAGE_KEY));
+    return normalizeLauncherFont(uiStorage.getItem(STORAGE_KEY));
   } catch {
     return DEFAULT_LAUNCHER_FONT;
   }
@@ -38,7 +39,7 @@ async function ensureMinecraftFontFace() {
 
   let dataUrl = "";
   try {
-    dataUrl = window.localStorage.getItem(FONT_CACHE_KEY) ?? "";
+    dataUrl = uiStorage.getItem(FONT_CACHE_KEY) ?? "";
   } catch {
     // Local cache is optional.
   }
@@ -48,9 +49,9 @@ async function ensureMinecraftFontFace() {
       dataUrl = await invoke<string>("launcher_minecraft_font_data_url");
       if (dataUrl.startsWith("data:font/ttf;base64,")) {
         try {
-          window.localStorage.setItem(FONT_CACHE_KEY, dataUrl);
+          uiStorage.setItem(FONT_CACHE_KEY, dataUrl);
         } catch {
-          // The exact font still works for this session if localStorage is blocked.
+          // The exact font still works for this session if uiStorage is blocked.
         }
       }
     } catch (error) {
@@ -76,7 +77,7 @@ export async function applyLauncherFont(value = loadLauncherFont()) {
 export function saveLauncherFont(value: LauncherFontChoice) {
   const choice = normalizeLauncherFont(value);
   try {
-    window.localStorage.setItem(STORAGE_KEY, choice);
+    uiStorage.setItem(STORAGE_KEY, choice);
   } catch {
     // Keep the live selection even when persistence is unavailable.
   }
@@ -86,7 +87,7 @@ export function saveLauncherFont(value: LauncherFontChoice) {
 
 export function resetLauncherFont() {
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    uiStorage.removeItem(STORAGE_KEY);
   } catch {
     // Ignore storage failures and still restore the default.
   }

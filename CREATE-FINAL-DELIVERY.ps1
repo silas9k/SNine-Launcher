@@ -19,9 +19,9 @@ if ($LASTEXITCODE -ne 0) { throw "Basiscommit ist nicht verfügbar: $BaseCommit"
 $outputFull = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $outputFull) { throw "Ausgabeverzeichnis existiert bereits: $outputFull" }
 New-Item -ItemType Directory -Path $outputFull | Out-Null
-$sourceName = "S9Lab-Launcher-v1.0.8-final-source.zip"
-$sourceRoot = "S9Lab-Launcher-v1.0.8-final-source"
-$deltaName = "S9Lab-Launcher-v1.0.8-delta-from-e1412af.zip"
+$sourceName = "S9Lab-Launcher-v1.0.10-final-source.zip"
+$sourceRoot = "S9Lab-Launcher-v1.0.10-final-source"
+$deltaName = "S9Lab-Launcher-v1.0.10-delta-from-e1412af.zip"
 $sourceZip = Join-Path $outputFull $sourceName
 $deltaZip = Join-Path $outputFull $deltaName
 $workRoot = Join-Path ([IO.Path]::GetTempPath()) ("s9lab-delivery-" + [guid]::NewGuid().ToString("N"))
@@ -90,7 +90,7 @@ try {
     $manifest = [ordered]@{
         format = "site.s9lab.delta"
         formatVersion = 1
-        productVersion = "1.0.8"
+        productVersion = "1.0.10"
         baseCommit = $BaseCommit.ToLowerInvariant()
         targetCommit = $targetCommit
         entries = $orderedEntries
@@ -112,7 +112,7 @@ try {
     }
     $changeLines = ($orderedEntries | ForEach-Object { "- $($_.status): ``$($_.path)``" }) -join "`n"
     $report = @"
-# S9Lab Launcher 1.0.8 – Lieferartefakte
+# S9Lab Launcher 1.0.10 – Lieferartefakte
 
 Zielcommit: ``$targetCommit``
 Delta-Basis: ``$($BaseCommit.ToLowerInvariant())``
@@ -140,7 +140,7 @@ $changeLines
 
 Es wurde nichts signiert, gepusht oder veröffentlicht. Das Authenticode-Produktionsgate bleibt separat.
 "@
-    [IO.File]::WriteAllText((Join-Path $outputFull "S9Lab-Launcher-v1.0.8-artifact-report.md"), $report, [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $outputFull "S9Lab-Launcher-v1.0.10-artifact-report.md"), $report, [Text.UTF8Encoding]::new($false))
 
     Write-Host "Lieferartefakte erzeugt: $outputFull" -ForegroundColor Green
     Write-Host "Source SHA-256: $sourceHash"

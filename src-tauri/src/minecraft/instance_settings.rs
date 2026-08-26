@@ -65,12 +65,24 @@ impl Default for InstanceSettings {
     }
 }
 
-fn settings_format_version() -> u32 { SETTINGS_FORMAT_VERSION }
-fn default_icon() -> String { "grass-block".into() }
-fn default_min_ram() -> u32 { 512 }
-fn default_max_ram() -> u32 { 4096 }
-fn default_width() -> u32 { 1280 }
-fn default_height() -> u32 { 720 }
+fn settings_format_version() -> u32 {
+    SETTINGS_FORMAT_VERSION
+}
+fn default_icon() -> String {
+    "grass-block".into()
+}
+fn default_min_ram() -> u32 {
+    512
+}
+fn default_max_ram() -> u32 {
+    4096
+}
+fn default_width() -> u32 {
+    1280
+}
+fn default_height() -> u32 {
+    720
+}
 
 #[derive(Clone)]
 pub struct InstanceSettingsStore {
@@ -78,7 +90,9 @@ pub struct InstanceSettingsStore {
 }
 
 impl InstanceSettingsStore {
-    pub fn new(registry: Arc<PathRegistry>) -> Self { Self { registry } }
+    pub fn new(registry: Arc<PathRegistry>) -> Self {
+        Self { registry }
+    }
 
     pub fn load(&self, profile_id: &str) -> AppResult<InstanceSettings> {
         validate_profile_id(profile_id)?;
@@ -96,14 +110,25 @@ impl InstanceSettingsStore {
         Ok(settings)
     }
 
-    pub fn save(&self, profile_id: &str, settings: &InstanceSettings) -> AppResult<InstanceSettings> {
+    pub fn save(
+        &self,
+        profile_id: &str,
+        settings: &InstanceSettings,
+    ) -> AppResult<InstanceSettings> {
         validate_profile_id(profile_id)?;
         validate_settings(settings)?;
         let path = self.settings_path(profile_id)?;
-        let parent = path.absolute().parent().ok_or_else(|| AppError::coded("instance_settings_path_invalid"))?;
+        let parent = path
+            .absolute()
+            .parent()
+            .ok_or_else(|| AppError::coded("instance_settings_path_invalid"))?;
         validate_existing_chain(path.anchor(), parent)?;
-        let temporary = self.registry.resolve("profiles", format!("{profile_id}/{SETTINGS_FILE}.part"))?;
-        let backup = self.registry.resolve("profiles", format!("{profile_id}/{SETTINGS_FILE}.previous"))?;
+        let temporary = self
+            .registry
+            .resolve("profiles", format!("{profile_id}/{SETTINGS_FILE}.part"))?;
+        let backup = self
+            .registry
+            .resolve("profiles", format!("{profile_id}/{SETTINGS_FILE}.previous"))?;
         if temporary.absolute().exists() {
             fs::remove_file(temporary.absolute())?;
         }
@@ -135,7 +160,11 @@ impl InstanceSettingsStore {
         self.save(profile_id, &settings).map(|_| ())
     }
 
-    pub fn instance_directory(&self, profile_id: &str, folder: &str) -> AppResult<std::path::PathBuf> {
+    pub fn instance_directory(
+        &self,
+        profile_id: &str,
+        folder: &str,
+    ) -> AppResult<std::path::PathBuf> {
         validate_profile_id(profile_id)?;
         let relative = match folder {
             "game" => "instance",
@@ -147,14 +176,17 @@ impl InstanceSettingsStore {
             "logs" => "instance/logs",
             _ => return Err(AppError::coded("instance_folder_kind_invalid")),
         };
-        let secure = self.registry.resolve("profiles", Path::new(profile_id).join(relative))?;
+        let secure = self
+            .registry
+            .resolve("profiles", Path::new(profile_id).join(relative))?;
         fs::create_dir_all(secure.absolute())?;
         validate_existing_chain(secure.anchor(), secure.absolute())?;
         Ok(secure.absolute().to_path_buf())
     }
 
     fn settings_path(&self, profile_id: &str) -> AppResult<crate::security::SecurePath> {
-        self.registry.resolve("profiles", format!("{profile_id}/{SETTINGS_FILE}"))
+        self.registry
+            .resolve("profiles", format!("{profile_id}/{SETTINGS_FILE}"))
     }
 }
 
@@ -162,7 +194,10 @@ pub fn validate_settings(settings: &InstanceSettings) -> AppResult<()> {
     if settings.format_version != SETTINGS_FORMAT_VERSION
         || settings.icon.is_empty()
         || settings.icon.len() > 64
-        || !settings.icon.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        || !settings
+            .icon
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
         || !(512..=16_384).contains(&settings.min_ram_mb)
         || !(2_048..=16_384).contains(&settings.max_ram_mb)
         || settings.min_ram_mb > settings.max_ram_mb
@@ -198,7 +233,9 @@ fn validate_profile_id(profile_id: &str) -> AppResult<()> {
     if profile_id.is_empty()
         || profile_id.len() > 128
         || !profile_id.is_ascii()
-        || !profile_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        || !profile_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
     {
         return Err(AppError::coded("runtime_profile_id_invalid"));
     }

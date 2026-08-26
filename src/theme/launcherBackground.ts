@@ -1,3 +1,4 @@
+import { uiStorage } from "../lib/uiStorage";
 export const DEFAULT_LAUNCHER_BACKGROUND = "#272727";
 const STORAGE_KEY = "snine.launcher.backgroundColor";
 
@@ -8,7 +9,7 @@ export function normalizeLauncherBackground(value: string | null | undefined): s
 
 export function loadLauncherBackground(): string {
   try {
-    return normalizeLauncherBackground(window.localStorage.getItem(STORAGE_KEY));
+    return normalizeLauncherBackground(uiStorage.getItem(STORAGE_KEY));
   } catch {
     return DEFAULT_LAUNCHER_BACKGROUND;
   }
@@ -23,16 +24,16 @@ export function applyLauncherBackground(value = loadLauncherBackground()): strin
 export function saveLauncherBackground(value: string): string {
   const normalized = normalizeLauncherBackground(value);
   try {
-    window.localStorage.setItem(STORAGE_KEY, normalized);
+    uiStorage.setItem(STORAGE_KEY, normalized);
   } catch {
-    // A blocked localStorage must not make the settings page unusable.
+    // A blocked uiStorage must not make the settings page unusable.
   }
   return applyLauncherBackground(normalized);
 }
 
 export function resetLauncherBackground(): string {
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    uiStorage.removeItem(STORAGE_KEY);
   } catch {
     // Ignore storage failures and still reset the active CSS variable.
   }

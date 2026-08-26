@@ -12,12 +12,7 @@ use std::{
     sync::{Arc, OnceLock},
     time::Duration,
 };
-use tokio::{
-    io::AsyncWriteExt,
-    process::Command,
-    sync::Mutex,
-    time::timeout,
-};
+use tokio::{io::AsyncWriteExt, process::Command, sync::Mutex, time::timeout};
 
 const JAVA_PROBE_TIMEOUT: Duration = Duration::from_secs(8);
 const JAVA_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(360);
@@ -118,7 +113,13 @@ impl JavaRuntimeResolver {
                 }
 
                 let runtime = self
-                    .probe(executable.clone(), trust_root, *major_version, "managed", true)
+                    .probe(
+                        executable.clone(),
+                        trust_root,
+                        *major_version,
+                        "managed",
+                        true,
+                    )
                     .await?;
                 self.write_managed_probe_cache(&executable, *major_version);
                 Ok(runtime)
@@ -271,10 +272,12 @@ impl JavaRuntimeResolver {
                 .ok_or_else(|| AppError::coded("runtime_managed_java_archive_invalid"))
         })
         .await
-        .map_err(|error| AppError::coded_with(
-            "runtime_managed_java_extract_join_failed",
-            [("detail", error.to_string())],
-        ))??;
+        .map_err(|error| {
+            AppError::coded_with(
+                "runtime_managed_java_extract_join_failed",
+                [("detail", error.to_string())],
+            )
+        })??;
 
         let staged_executable = java_home.join("bin").join("java.exe");
         self.probe(

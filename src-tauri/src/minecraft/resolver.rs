@@ -406,7 +406,10 @@ impl RuntimeResolver {
         self.fabric_catalog_cache
             .lock()
             .map_err(|_| AppError::coded("runtime_metadata_cache_poisoned"))?
-            .insert(minecraft_version.to_string(), (Instant::now(), result.clone()));
+            .insert(
+                minecraft_version.to_string(),
+                (Instant::now(), result.clone()),
+            );
         Ok(result)
     }
 
@@ -584,7 +587,9 @@ fn resolve_mojang_document(
     version: MojangVersionDocument,
 ) -> AppResult<ResolvedMinecraftVersion> {
     if !matches!(version.release_type.as_str(), "release" | "snapshot") {
-        return Err(AppError::coded("runtime_minecraft_release_type_unsupported"));
+        return Err(AppError::coded(
+            "runtime_minecraft_release_type_unsupported",
+        ));
     }
     if version.id != requested_version {
         return Err(AppError::coded("runtime_version_identity_mismatch"));
@@ -687,7 +692,9 @@ fn resolve_mojang_document(
     })
 }
 
-fn default_release_type() -> String { "release".into() }
+fn default_release_type() -> String {
+    "release".into()
+}
 
 fn normalize_logging_argument(value: &str) -> AppResult<String> {
     if value.is_empty()

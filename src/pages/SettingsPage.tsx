@@ -1,3 +1,5 @@
+import { useReleaseText } from "../i18n/releaseUiText";
+import { uiStorage } from "../lib/uiStorage";
 import {
   ChevronDown,
   Eye,
@@ -71,7 +73,7 @@ function formatPixels(value: number) {
 function loadCollapsedSections(): Record<string, boolean> {
   if (typeof window === "undefined") return { ...DEFAULT_COLLAPSED_SECTIONS };
   try {
-    const raw = window.localStorage.getItem(COLLAPSED_SECTIONS_STORAGE_KEY);
+    const raw = uiStorage.getItem(COLLAPSED_SECTIONS_STORAGE_KEY);
     if (!raw) return { ...DEFAULT_COLLAPSED_SECTIONS };
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return Object.fromEntries(
@@ -85,7 +87,7 @@ function loadCollapsedSections(): Record<string, boolean> {
 function saveCollapsedSectionsState(next: Record<string, boolean>) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(COLLAPSED_SECTIONS_STORAGE_KEY, JSON.stringify(next));
+    uiStorage.setItem(COLLAPSED_SECTIONS_STORAGE_KEY, JSON.stringify(next));
   } catch {
     // ignore storage write failures
   }
@@ -166,6 +168,7 @@ function Toggle({ checked, label, onChange }: { checked: boolean; label: string;
 }
 
 export function SettingsPage() {
+  const rt = useReleaseText();
   const { t } = useI18n();
   const settings = useShellStore((state) => state.settings);
   const saveSettings = useShellStore((state) => state.saveSettings);
@@ -227,13 +230,13 @@ export function SettingsPage() {
       <div className="snine-settings-page__inner">
         <header className="snine-settings-page__heading">
           <div>
-            <small>SNINE LAUNCHER / EINSTELLUNGEN</small>
-            <h1>Launcher anpassen</h1>
-            <p>Verhalten, Spieler-Vorschau, Integrationen und Design getrennt verwalten.</p>
+            <small>{rt("SNINE LAUNCHER / EINSTELLUNGEN")}</small>
+            <h1>{rt("Launcher anpassen")}</h1>
+            <p>{rt("Verhalten, Spieler-Vorschau, Integrationen und Design getrennt verwalten.")}</p>
           </div>
           <button type="button" onClick={() => void resetAll()} disabled={loading}>
             <RotateCcw aria-hidden="true" />
-            ALLES ZURÜCKSETZEN
+            {rt("ALLES ZURÜCKSETZEN")}
           </button>
         </header>
 
@@ -241,7 +244,7 @@ export function SettingsPage() {
           <CollapsibleSettingsSection
             id="launcher-game"
             icon={Gamepad2}
-            title="Launcher & Spiel"
+            title={rt("Launcher & Spiel")}
             description="Was beim Starten und Aktualisieren passieren soll."
             collapsed={Boolean(collapsedSections["launcher-game"])}
             onToggle={() => toggleSection("launcher-game")}
@@ -253,7 +256,7 @@ export function SettingsPage() {
               <SettingsRow icon={Gamepad2} title={t("instances.showOld")} description={t("instances.showOldDescription")}>
                 <Toggle checked={settings.showOldMinecraftVersions} label={t("instances.showOld")} onChange={(value) => update("showOldMinecraftVersions", value)} />
               </SettingsRow>
-              <SettingsRow icon={XCircle} title="Launcher schließen, wenn Minecraft startet" description="Beendet den Launcher automatisch, sobald das Spiel wirklich läuft.">
+              <SettingsRow icon={XCircle} title={rt("Launcher schließen, wenn Minecraft startet")} description="Beendet den Launcher automatisch, sobald das Spiel wirklich läuft.">
                 <Toggle checked={preferences.closeOnLaunch} label="Launcher nach Spielstart schließen" onChange={(value) => updatePreference("closeOnLaunch", value)} />
               </SettingsRow>
             </div>
@@ -262,16 +265,16 @@ export function SettingsPage() {
           <CollapsibleSettingsSection
             id="player-preview"
             icon={Eye}
-            title="Spieler-Vorschau"
+            title={rt("Spieler-Vorschau")}
             description="Lege fest, was am 3D-Modell im Launcher angezeigt wird."
             collapsed={Boolean(collapsedSections["player-preview"])}
             onToggle={() => toggleSection("player-preview")}
           >
             <div className="snine-settings-grid">
-              <SettingsRow icon={Sparkles} title="Cosmetics an der Vorschau anzeigen" description="Blendet Cape, Wings, Bandana und andere Cosmetics am Modell ein oder aus.">
+              <SettingsRow icon={Sparkles} title={rt("Cosmetics an der Vorschau anzeigen")} description="Blendet Cape, Wings, Bandana und andere Cosmetics am Modell ein oder aus.">
                 <Toggle checked={preferences.showPreviewCosmetics} label="Cosmetics an Vorschau anzeigen" onChange={(value) => updatePreference("showPreviewCosmetics", value)} />
               </SettingsRow>
-              <SettingsRow icon={Gamepad2} title="Vorschau-Animationen" description="Aktiviert die ruhige Idle-Bewegung des Skin-Modells.">
+              <SettingsRow icon={Gamepad2} title={rt("Vorschau-Animationen")} description="Aktiviert die ruhige Idle-Bewegung des Skin-Modells.">
                 <Toggle checked={preferences.previewAnimations} label="Vorschau-Animationen" onChange={(value) => updatePreference("previewAnimations", value)} />
               </SettingsRow>
             </div>
@@ -280,13 +283,13 @@ export function SettingsPage() {
           <CollapsibleSettingsSection
             id="integrations"
             icon={MessageCircle}
-            title="Integrationen"
+            title={rt("Integrationen")}
             description="Verbindungen zu externen Apps kontrollieren."
             collapsed={Boolean(collapsedSections.integrations)}
             onToggle={() => toggleSection("integrations")}
           >
             <div className="snine-settings-grid">
-              <SettingsRow icon={MessageCircle} title="Discord Rich Presence" description="Zeigt in Discord an, dass du den SNine Launcher verwendest.">
+              <SettingsRow icon={MessageCircle} title={rt("Discord Rich Presence")} description="Zeigt in Discord an, dass du den SNine Launcher verwendest.">
                 <Toggle checked={preferences.discordRpc} label="Discord Rich Presence" onChange={(value) => updatePreference("discordRpc", value)} />
               </SettingsRow>
             </div>
@@ -295,7 +298,7 @@ export function SettingsPage() {
           <CollapsibleSettingsSection
             id="appearance"
             icon={Palette}
-            title="Darstellung"
+            title={rt("Darstellung")}
             description="Sprache, Schrift, Hintergrund und Abstände des Launchers."
             collapsed={Boolean(collapsedSections.appearance)}
             onToggle={() => toggleSection("appearance")}

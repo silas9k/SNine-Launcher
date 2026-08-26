@@ -138,7 +138,9 @@ pub fn phase4_rename_profile(
     display_name: String,
 ) -> Result<ProfileSummary, IpcError> {
     authorize_main_window(&window)?;
-    profiles.rename_profile(&profile_id, &display_name).map_err(Into::into)
+    profiles
+        .rename_profile(&profile_id, &display_name)
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -149,7 +151,10 @@ pub async fn phase5_profiles_workspace(
 ) -> Result<crate::minecraft::service::Phase5ProfilesWorkspace, IpcError> {
     authorize_main_window(&window)?;
     let profiles = profiles.list_profiles().map_err(IpcError::from)?;
-    runtime.profiles_workspace(profiles).await.map_err(Into::into)
+    runtime
+        .profiles_workspace(profiles)
+        .await
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -183,7 +188,9 @@ pub fn phase5_open_instance_folder(
     folder: String,
 ) -> Result<(), IpcError> {
     authorize_main_window(&window)?;
-    runtime.open_instance_folder(&profile_id, &folder).map_err(Into::into)
+    runtime
+        .open_instance_folder(&profile_id, &folder)
+        .map_err(Into::into)
 }
 
 fn emit_launch_status(
@@ -610,61 +617,95 @@ pub async fn phase5_launch_profile(
         .await?;
 
         // SNine Client is a Fabric 1.21.11 client. Never silently launch a Vanilla or
-    // differently-versioned profile: make the selected launcher profile match the
-    // client runtime first, then place the verified remote client jar into mods/.
-    let mut status = runtime.status(&profile_id).await.map_err(IpcError::from)?;
-    let runtime_is_snine = status.runtime.as_ref().is_some_and(|intent| {
-        intent.minecraft_version == SNINE_CLIENT_MINECRAFT_VERSION
-            && intent.loader.kind == crate::runtime::LoaderKind::Fabric
-            && intent
-                .loader
-                .loader_version
-                .as_deref()
-                .is_some_and(fabric_loader_supported)
-    });
+        // differently-versioned profile: make the selected launcher profile match the
+        // client runtime first, then place the verified remote client jar into mods/.
+        let mut status = runtime.status(&profile_id).await.map_err(IpcError::from)?;
+        let runtime_is_snine = status.runtime.as_ref().is_some_and(|intent| {
+            intent.minecraft_version == SNINE_CLIENT_MINECRAFT_VERSION
+                && intent.loader.kind == crate::runtime::LoaderKind::Fabric
+                && intent
+                    .loader
+                    .loader_version
+                    .as_deref()
+                    .is_some_and(fabric_loader_supported)
+        });
 
-    if status.install_state != "installed" || !runtime_is_snine {
-        transition_launch(
-            &app,
-            runtime.inner(),
-            &launch_id,
-            crate::minecraft::profile_launch::ProfileLaunchState::Downloading,
-        )
-        .await?;
-        let catalog = runtime
-            .catalog(Some(SNINE_CLIENT_MINECRAFT_VERSION))
-            .await
-            .map_err(IpcError::from)?;
-        let loader = catalog
-            .fabric_versions
-            .iter()
-            .find(|entry| entry.stable && fabric_loader_supported(&entry.version))
-            .or_else(|| {
-                catalog
-                    .fabric_versions
-                    .iter()
-                    .find(|entry| fabric_loader_supported(&entry.version))
-            })
-            .ok_or_else(|| IpcError::from(AppError::coded("snine_fabric_loader_unavailable")))?;
-        let intent = crate::runtime::ProfileRuntimeIntent {
-            minecraft_version: SNINE_CLIENT_MINECRAFT_VERSION.into(),
-            loader: crate::runtime::LoaderSelection {
-                kind: crate::runtime::LoaderKind::Fabric,
-                loader_version: Some(loader.version.clone()),
-            },
-            java: crate::runtime::JavaPolicy::Managed {
-                major_version: catalog.selected_minecraft_java_major.unwrap_or(21),
-            },
-        };
-        runtime
-            .install(
-                &profile_id,
-                intent,
-                crate::profiles::model::S9labComponentSelection::Disabled,
+        if status.install_state != "installed" || !runtime_is_snine {
+            transition_launch(
+                &app,
+                runtime.inner(),
+                &launch_id,
+                crate::minecraft::profile_launch::ProfileLaunchState::Downloading,
             )
-            .await
-            .map_err(IpcError::from)?;
-        status = runtime.status(&profile_id).await.map_err(IpcError::from)?;
+            .await?;
+            let catalog = runtime
+                .catalog(Some(SNINE_CLIENT_MINECRAFT_VERSION))
+                .await
+                .map_err(IpcError::from)?;
+            let loader = catalog
+                .fabric_versions
+                .iter()
+                .find(|entry| entry.stable && fabric_loader_supported(&entry.version))
+                .or_else(|| {
+                    catalog
+                        .fabric_versions
+                        .iter()
+                        .find(|entry| fabric_loader_supported(&entry.version))
+                })
+                .ok_or_else(|| {
+                    IpcError::from(AppError::coded("snine_fabric_loader_unavailable"))
+                })?;
+            let intent = crate::runtime::ProfileRuntimeIntent {
+                minecraft_version: SNINE_CLIENT_MINECRAFT_VERSION.into(),
+                loader: crate::runtime::LoaderSelection {
+                    kind: crate::runtime::LoaderKind::Fabric,
+                    loader_version: Some(loader.version.clone()),
+                },
+                java: crate::runtime::JavaPolicy::Managed {
+                    major_version: catalog.selected_minecraft_java_major.unwrap_or(21),
+                },
+            };
+            runtime
+                .install(
+                    &profile_id,
+                    intent,
+                    crate::profiles::model::S9labComponentSelection::Disabled,
+                )
+                .await
+                .map_err(IpcError::from)?;
+            status = runtime.status(&profile_id).await.map_err(IpcError::from)?;
+            transition_launch(
+                &app,
+                runtime.inner(),
+                &launch_id,
+                crate::minecraft::profile_launch::ProfileLaunchState::CheckingFiles,
+            )
+            .await?;
+        }
+
+        // The old bundled S9Lab/SNine component must not coexist with the downloaded
+        // snineclient.jar. Disable it before installing the current external build.
+        if status.component.is_some() {
+            runtime
+                .change_component(
+                    &profile_id,
+                    crate::profiles::model::S9labComponentSelection::Disabled,
+                )
+                .await
+                .map_err(IpcError::from)?;
+        }
+
+        // Home preloads updates in the background. PLAY performs exactly one client
+        // readiness decision; no duplicate remote probe runs on the critical path.
+        let fast_step = std::time::Instant::now();
+        let verified_client_version =
+            crate::snine_client_delivery::ensure_client_for_launch(&app, core.inner(), &profile_id)
+                .await
+                .map_err(snine_launch_error)?;
+        eprintln!(
+            "[snine-launch-fast] client readiness: {} ms",
+            fast_step.elapsed().as_millis()
+        );
         transition_launch(
             &app,
             runtime.inner(),
@@ -672,89 +713,53 @@ pub async fn phase5_launch_profile(
             crate::minecraft::profile_launch::ProfileLaunchState::CheckingFiles,
         )
         .await?;
-    }
-
-    // The old bundled S9Lab/SNine component must not coexist with the downloaded
-    // snineclient.jar. Disable it before installing the current external build.
-    if status.component.is_some() {
-        runtime
-            .change_component(
-                &profile_id,
-                crate::profiles::model::S9labComponentSelection::Disabled,
-            )
-            .await
-            .map_err(IpcError::from)?;
-    }
-
-    // Home preloads updates in the background. PLAY performs exactly one client
-    // readiness decision; no duplicate remote probe runs on the critical path.
-    let fast_step = std::time::Instant::now();
-    let verified_client_version =
-        crate::snine_client_delivery::ensure_client_for_launch(&app, core.inner(), &profile_id)
+        let fast_step = std::time::Instant::now();
+        crate::snine_client_delivery::ensure_required_support_mods(&app, core.inner(), &profile_id)
             .await
             .map_err(snine_launch_error)?;
-    eprintln!(
-        "[snine-launch-fast] client readiness: {} ms",
-        fast_step.elapsed().as_millis()
-    );
-    transition_launch(
-        &app,
-        runtime.inner(),
-        &launch_id,
-        crate::minecraft::profile_launch::ProfileLaunchState::CheckingFiles,
-    )
-    .await?;
-    let fast_step = std::time::Instant::now();
-    crate::snine_client_delivery::ensure_required_support_mods(&app, core.inner(), &profile_id)
-        .await
-        .map_err(snine_launch_error)?;
-    eprintln!(
-        "[snine-launch-fast] support mods readiness: {} ms",
-        fast_step.elapsed().as_millis()
-    );
+        eprintln!(
+            "[snine-launch-fast] support mods readiness: {} ms",
+            fast_step.elapsed().as_millis()
+        );
 
-    // The runtime was validated above (and installation/change_component fail closed).
-    // Avoid a second status/database/manifest walk immediately before Java spawn.
-    let loader_version = status
-        .runtime
-        .as_ref()
-        .and_then(|intent| intent.loader.loader_version.as_deref())
-        .unwrap_or("unknown");
-    println!(
-        "[SNine Launcher] Launching verified SNine Client {} on Minecraft {} / Fabric {}",
-        verified_client_version.as_deref().unwrap_or("unknown"),
-        SNINE_CLIENT_MINECRAFT_VERSION,
-        loader_version
-    );
+        // The runtime was validated above (and installation/change_component fail closed).
+        // Avoid a second status/database/manifest walk immediately before Java spawn.
+        let loader_version = status
+            .runtime
+            .as_ref()
+            .and_then(|intent| intent.loader.loader_version.as_deref())
+            .unwrap_or("unknown");
+        println!(
+            "[SNine Launcher] Launching verified SNine Client {} on Minecraft {} / Fabric {}",
+            verified_client_version.as_deref().unwrap_or("unknown"),
+            SNINE_CLIENT_MINECRAFT_VERSION,
+            loader_version
+        );
 
-    transition_launch(
-        &app,
-        runtime.inner(),
-        &launch_id,
-        crate::minecraft::profile_launch::ProfileLaunchState::Starting,
-    )
-    .await?;
+        transition_launch(
+            &app,
+            runtime.inner(),
+            &launch_id,
+            crate::minecraft::profile_launch::ProfileLaunchState::Starting,
+        )
+        .await?;
 
-    let launch = runtime
-        .launch(auth.inner(), &launch_id, &profile_id, memory_mb)
-        .await
-        .map_err(IpcError::from)?;
-    eprintln!(
-        "[snine-launch-fast] Play -> Minecraft process: {} ms",
-        snine_launch_total.elapsed().as_millis()
-    );
-    emit_launch_status(&app, &launch);
-    Ok(launch)
+        let launch = runtime
+            .launch(auth.inner(), &launch_id, &profile_id, memory_mb)
+            .await
+            .map_err(IpcError::from)?;
+        eprintln!(
+            "[snine-launch-fast] Play -> Minecraft process: {} ms",
+            snine_launch_total.elapsed().as_millis()
+        );
+        emit_launch_status(&app, &launch);
+        Ok(launch)
     }
     .await;
 
     match result {
         Ok(launch) => {
-            spawn_launch_monitor(
-                app,
-                runtime.inner().clone(),
-                launch.launch_id.clone(),
-            );
+            spawn_launch_monitor(app, runtime.inner().clone(), launch.launch_id.clone());
             Ok(launch)
         }
         Err(error) => {
@@ -818,12 +823,7 @@ pub async fn phase5_launch_instance(
         )
         .await?;
         let launch = runtime
-            .launch(
-                auth.inner(),
-                &launch_id,
-                &profile_id,
-                settings.max_ram_mb,
-            )
+            .launch(auth.inner(), &launch_id, &profile_id, settings.max_ram_mb)
             .await
             .map_err(IpcError::from)?;
         emit_launch_status(&app, &launch);
@@ -833,11 +833,7 @@ pub async fn phase5_launch_instance(
 
     match result {
         Ok(launch) => {
-            spawn_launch_monitor(
-                app,
-                runtime.inner().clone(),
-                launch.launch_id.clone(),
-            );
+            spawn_launch_monitor(app, runtime.inner().clone(), launch.launch_id.clone());
             Ok(launch)
         }
         Err(error) => {

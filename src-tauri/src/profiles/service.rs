@@ -2,9 +2,9 @@ use crate::{
     app::paths::LauncherPaths,
     content::ContentKind,
     content_projection::immutable_projected_targets_for_duplicate,
-    minecraft::profile_sharing::ProfileSharingService,
     error::{AppError, AppResult},
     foundation::CoreServices,
+    minecraft::profile_sharing::ProfileSharingService,
     operations::{
         engine::OperationEngine,
         model::{
@@ -252,7 +252,11 @@ impl ProfileService {
         )
     }
 
-    pub fn rename_profile(&self, profile_id: &str, display_name: &str) -> AppResult<ProfileSummary> {
+    pub fn rename_profile(
+        &self,
+        profile_id: &str,
+        display_name: &str,
+    ) -> AppResult<ProfileSummary> {
         let display_name = validate_display_name(display_name)?;
         let profile = self
             .storage

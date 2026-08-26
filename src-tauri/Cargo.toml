@@ -36,6 +36,7 @@ futures-util = "0.3"
 regex = "1"
 opener = "0.7"
 ring = "=0.17.14"
+tauri-plugin-store = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = [

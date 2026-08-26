@@ -1,3 +1,4 @@
+import { useReleaseText } from "../../i18n/releaseUiText";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Box } from "lucide-react";
 import { launcherBadgeIconUrl, type LauncherCosmeticAsset } from "../../lib/snineClientBridge";
@@ -31,6 +32,7 @@ export function LauncherSkinPreview({
   cameraDistance = 62,
   cameraTargetY = 16,
 }: LauncherSkinPreviewProps) {
+  const rt = useReleaseText();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const nametagPlaneRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<LauncherSkinRenderer | null>(null);
@@ -225,10 +227,10 @@ export function LauncherSkinPreview({
       {state === "loading" ? (
         <div className="launcher-skin__loading">
           <Box aria-hidden="true" />
-          <span>PLAYER WIRD GELADEN</span>
+          <span>{rt("PLAYER WIRD GELADEN")}</span>
         </div>
       ) : null}
-      <div className="launcher-skin__hint" aria-hidden="true">DRAG · ROTATE&nbsp;&nbsp; / &nbsp;&nbsp;DOUBLE CLICK · FRONT&nbsp;&nbsp; / &nbsp;&nbsp;SCROLL · ZOOM</div>
+      <div className="launcher-skin__hint" aria-hidden="true">{rt("DRAG · ROTATE&nbsp;&nbsp; / &nbsp;&nbsp;DOUBLE CLICK · FRONT&nbsp;&nbsp; / &nbsp;&nbsp;SCROLL · ZOOM")}</div>
     </div>
   );
 }

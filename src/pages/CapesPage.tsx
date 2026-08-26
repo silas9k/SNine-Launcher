@@ -1,3 +1,4 @@
+import { useReleaseText } from "../i18n/releaseUiText";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   AlertTriangle,
@@ -113,30 +114,31 @@ function CapeTexturePreview({ src, label }: { src: string | null | undefined; la
 }
 
 function GuidelinesDialog({ onClose, onAccept }: { onClose: () => void; onAccept: () => void }) {
+  const rt = useReleaseText();
   return (
     <div className="snine-cape-modal-backdrop" role="presentation">
       <section className="snine-cape-guidelines" role="dialog" aria-modal="true" aria-labelledby="cape-guidelines-title">
         <header>
-          <div><ShieldAlert aria-hidden="true" /><strong id="cape-guidelines-title">CAPE GUIDELINES</strong></div>
-          <button type="button" onClick={onClose} aria-label="Schließen"><X aria-hidden="true" /></button>
+          <div><ShieldAlert aria-hidden="true" /><strong id="cape-guidelines-title">{rt("CAPE GUIDELINES")}</strong></div>
+          <button type="button" onClick={onClose} aria-label={rt("Schließen")}><X aria-hidden="true" /></button>
         </header>
         <div className="snine-cape-guidelines__body">
-          <small>BEFORE YOU UPLOAD</small>
-          <h2>Bitte lies und akzeptiere die Regeln für Custom Capes.</h2>
+          <small>{rt("BEFORE YOU UPLOAD")}</small>
+          <h2>{rt("Bitte lies und akzeptiere die Regeln für Custom Capes.")}</h2>
           <div className="snine-cape-guidelines__rules">
             <ul>
-              <li>Keine urheberrechtlich geschützten Capes von anderen Clients, Marken oder Spielen.</li>
-              <li>Keine expliziten, beleidigenden oder diskriminierenden Inhalte.</li>
-              <li>Keine politischen oder extremistischen Inhalte.</li>
-              <li>Keine Werbung, Scam-Links oder absichtlich irreführenden Motive.</li>
-              <li>Du musst das Recht haben, die hochgeladene Grafik zu verwenden.</li>
-              <li>Die PNG muss im 2:1-Format vorliegen und darf maximal 512×256 Pixel groß sein.</li>
+              <li>{rt("Keine urheberrechtlich geschützten Capes von anderen Clients, Marken oder Spielen.")}</li>
+              <li>{rt("Keine expliziten, beleidigenden oder diskriminierenden Inhalte.")}</li>
+              <li>{rt("Keine politischen oder extremistischen Inhalte.")}</li>
+              <li>{rt("Keine Werbung, Scam-Links oder absichtlich irreführenden Motive.")}</li>
+              <li>{rt("Du musst das Recht haben, die hochgeladene Grafik zu verwenden.")}</li>
+              <li>{rt("Die PNG muss im 2:1-Format vorliegen und darf maximal 512×256 Pixel groß sein.")}</li>
             </ul>
-            <p><AlertTriangle aria-hidden="true" /> Verstöße können zu einer temporären oder permanenten Upload-Sperre führen.</p>
+            <p><AlertTriangle aria-hidden="true" /> {rt("Verstöße können zu einer temporären oder permanenten Upload-Sperre führen.")}</p>
           </div>
         </div>
         <footer>
-          <button type="button" className="is-primary" onClick={onAccept}><CheckCircle2 aria-hidden="true" /> AKZEPTIEREN & WEITER</button>
+          <button type="button" className="is-primary" onClick={onAccept}><CheckCircle2 aria-hidden="true" /> {rt("AKZEPTIEREN & WEITER")}</button>
         </footer>
       </section>
     </div>
@@ -144,6 +146,7 @@ function GuidelinesDialog({ onClose, onAccept }: { onClose: () => void; onAccept
 }
 
 function UploadDialog({ account, initialTemplate, onClose, onUploaded }: { account: Account; initialTemplate: CapeTemplate; onClose: () => void; onUploaded: () => void }) {
+  const rt = useReleaseText();
   const [capeName, setCapeName] = useState("");
   const [template, setTemplate] = useState<CapeTemplate>(initialTemplate);
   const [file, setFile] = useState<File | null>(null);
@@ -196,8 +199,8 @@ function UploadDialog({ account, initialTemplate, onClose, onUploaded }: { accou
     <div className="snine-cape-modal-backdrop" role="presentation">
       <section className="snine-cape-upload-dialog" role="dialog" aria-modal="true" aria-labelledby="cape-upload-title">
         <header>
-          <div><small>CUSTOM CAPE</small><h2 id="cape-upload-title">Cape hochladen</h2></div>
-          <button type="button" onClick={onClose} disabled={submitting} aria-label="Schließen"><X aria-hidden="true" /></button>
+          <div><small>{rt("CUSTOM CAPE")}</small><h2 id="cape-upload-title">{rt("Cape hochladen")}</h2></div>
+          <button type="button" onClick={onClose} disabled={submitting} aria-label={rt("Schließen")}><X aria-hidden="true" /></button>
         </header>
         <div className="snine-cape-upload-dialog__body">
           <div className="snine-cape-upload-preview">
@@ -205,28 +208,28 @@ function UploadDialog({ account, initialTemplate, onClose, onUploaded }: { accou
             <span>{file ? `${file.name} · ${(file.size / 1024).toFixed(0)} KiB` : "PNG · 2:1 · max. 512×256 · max. 1 MiB"}</span>
           </div>
           <div className="snine-cape-upload-fields">
-            <label><span>CAPE NAME</span><input value={capeName} maxLength={32} onChange={(event) => setCapeName(event.target.value)} placeholder="Mein Cape" /></label>
+            <label><span>{rt("CAPE NAME")}</span><input value={capeName} maxLength={32} onChange={(event) => setCapeName(event.target.value)} placeholder={rt("Mein Cape")} /></label>
             <fieldset>
-              <legend>VORLAGE</legend>
-              <button type="button" className={template === "CAPE" ? "is-active" : ""} onClick={() => setTemplate("CAPE")}>NUR CAPE</button>
-              <button type="button" className={template === "CAPE_ELYTRA" ? "is-active" : ""} onClick={() => setTemplate("CAPE_ELYTRA")}>CAPE + ELYTRA</button>
+              <legend>{rt("VORLAGE")}</legend>
+              <button type="button" className={template === "CAPE" ? "is-active" : ""} onClick={() => setTemplate("CAPE")}>{rt("NUR CAPE")}</button>
+              <button type="button" className={template === "CAPE_ELYTRA" ? "is-active" : ""} onClick={() => setTemplate("CAPE_ELYTRA")}>{rt("CAPE + ELYTRA")}</button>
             </fieldset>
             <button type="button" className="snine-cape-template-download" onClick={() => void downloadTemplate()}>
               <Download aria-hidden="true" />
-              <span><strong>VORLAGE HERUNTERLADEN</strong><small>Offizielles SNine Template · 512×256 PNG</small></span>
+              <span><strong>{rt("VORLAGE HERUNTERLADEN")}</strong><small>{rt("Offizielles SNine Template · 512×256 PNG")}</small></span>
             </button>
             {templateDownload ? <p className="snine-cape-template-download__status"><CheckCircle2 aria-hidden="true" /> {templateDownload}</p> : null}
             <label className={`snine-cape-file${file ? " has-file" : ""}`}>
               <Upload aria-hidden="true" />
-              <span><strong>{file ? "Andere PNG wählen" : "PNG auswählen"}</strong><small>Die Datei wird vor dem Upload lokal geprüft.</small></span>
+              <span><strong>{file ? "Andere PNG wählen" : "PNG auswählen"}</strong><small>{rt("Die Datei wird vor dem Upload lokal geprüft.")}</small></span>
               <input type="file" accept="image/png,.png" onChange={(event) => void chooseFile(event.target.files?.[0] ?? null)} />
             </label>
             {error ? <p className="snine-cape-form-error">{error}</p> : null}
           </div>
         </div>
         <footer>
-          <span>Nach dem Upload prüft ein SNine-Admin dein Cape über Discord.</span>
-          <div><button type="button" onClick={onClose} disabled={submitting}>ABBRECHEN</button><button type="button" className="is-primary" onClick={() => void submit()} disabled={submitting || !preview}>{submitting ? <LoaderCircle className="ui-spin" /> : <Upload />} HOCHLADEN</button></div>
+          <span>{rt("Nach dem Upload prüft ein SNine-Admin dein Cape über Discord.")}</span>
+          <div><button type="button" onClick={onClose} disabled={submitting}>{rt("ABBRECHEN")}</button><button type="button" className="is-primary" onClick={() => void submit()} disabled={submitting || !preview}>{submitting ? <LoaderCircle className="ui-spin" /> : <Upload />} {rt("HOCHLADEN")}</button></div>
         </footer>
       </section>
     </div>
@@ -246,6 +249,7 @@ function CapeInspectDialog({
   onEquip: (cape: CustomCapeView) => Promise<void>;
   onUnequip: () => Promise<void>;
 }) {
+  const rt = useReleaseText();
   const [busy, setBusy] = useState(false);
   const [cameraYaw, setCameraYaw] = useState(180);
 
@@ -301,7 +305,7 @@ function CapeInspectDialog({
             <h2 id="cape-inspect-title">{title}</h2>
             <p>{subtitle}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Schließen"><X aria-hidden="true" /></button>
+          <button type="button" onClick={onClose} aria-label={rt("Schließen")}><X aria-hidden="true" /></button>
         </header>
 
         <div className="snine-cape-inspect-dialog__body">
@@ -317,14 +321,14 @@ function CapeInspectDialog({
                 cameraDistance={76}
                 cameraTargetY={16}
               />
-              <div className="snine-cape-inspect-dialog__view-tabs" aria-label="Ansicht wählen">
-                <button type="button" className={cameraYaw === 0 ? "is-active" : ""} onClick={() => setCameraYaw(0)}>VORNE</button>
-                <button type="button" className={cameraYaw === 180 ? "is-active" : ""} onClick={() => setCameraYaw(180)}>RÜCKSEITE</button>
+              <div className="snine-cape-inspect-dialog__view-tabs" aria-label={rt("Ansicht wählen")}>
+                <button type="button" className={cameraYaw === 0 ? "is-active" : ""} onClick={() => setCameraYaw(0)}>{rt("VORNE")}</button>
+                <button type="button" className={cameraYaw === 180 ? "is-active" : ""} onClick={() => setCameraYaw(180)}>{rt("RÜCKSEITE")}</button>
               </div>
             </div>
             <div className="snine-cape-inspect-dialog__stage-note">
               <Eye aria-hidden="true" />
-              <span>Ziehe zum Drehen, Mausrad zum Zoomen. Doppelklick setzt die Ansicht zurück.</span>
+              <span>{rt("Ziehe zum Drehen, Mausrad zum Zoomen. Doppelklick setzt die Ansicht zurück.")}</span>
             </div>
           </div>
 
@@ -340,20 +344,20 @@ function CapeInspectDialog({
 
             <dl className="snine-cape-inspect-dialog__stats">
               <div>
-                <dt>STATUS</dt>
+                <dt>{rt("STATUS")}</dt>
                 <dd>{preview.type === "custom" ? (preview.cape.status === "APPROVED" ? "FREIGEGEBEN" : preview.cape.status === "PENDING" ? "IN PRÜFUNG" : "ABGELEHNT") : preview.cape.state}</dd>
               </div>
               <div>
-                <dt>TYP</dt>
+                <dt>{rt("TYP")}</dt>
                 <dd>{preview.type === "custom" ? "COMMUNITY" : "VANILLA"}</dd>
               </div>
               <div>
-                <dt>AKTIV</dt>
+                <dt>{rt("AKTIV")}</dt>
                 <dd>{active ? "JA" : "NEIN"}</dd>
               </div>
               {preview.type === "custom" ? (
                 <div>
-                  <dt>VERWENDUNGEN</dt>
+                  <dt>{rt("VERWENDUNGEN")}</dt>
                   <dd>{preview.cape.uses.toLocaleString("de-DE")}</dd>
                 </div>
               ) : null}
@@ -368,16 +372,16 @@ function CapeInspectDialog({
                 active ? (
                   <button type="button" onClick={() => void handleUnequip()} disabled={busy}>
                     {busy ? <LoaderCircle className="ui-spin" /> : <X aria-hidden="true" />}
-                    ABLEGEN
+                    {rt("ABLEGEN")}
                   </button>
                 ) : (
                   <button type="button" className="is-primary" onClick={() => void handleEquip()} disabled={busy}>
                     {busy ? <LoaderCircle className="ui-spin" /> : <Sparkles aria-hidden="true" />}
-                    AUSRÜSTEN
+                    {rt("AUSRÜSTEN")}
                   </button>
                 )
               ) : null}
-              <button type="button" onClick={onClose}>SCHLIESSEN</button>
+              <button type="button" onClick={onClose}>{rt("SCHLIESSEN")}</button>
             </div>
           </aside>
         </div>
@@ -396,6 +400,7 @@ function toCardKeyboardHandler(callback: () => void) {
 }
 
 export function CapesPage() {
+  const rt = useReleaseText();
   const [account, setAccount] = useState<Account | null>(null);
   const [tab, setTab] = useState<CapeTab>("all");
   const [query, setQuery] = useState("");
@@ -544,12 +549,12 @@ export function CapesPage() {
       <div className="snine-capes-page__inner">
         <header className="snine-capes-heading">
           <div>
-            <small>SNINE LAUNCHER / COSMETICS</small>
-            <h1>Capes</h1>
-            <p>Entdecke kostenlose Community-Capes, lade dein eigenes hoch und schau dir jedes Cape direkt auf deinem Skin im Launcher an.</p>
+            <small>{rt("SNINE LAUNCHER / COSMETICS")}</small>
+            <h1>{rt("Capes")}</h1>
+            <p>{rt("Entdecke kostenlose Community-Capes, lade dein eigenes hoch und schau dir jedes Cape direkt auf deinem Skin im Launcher an.")}</p>
           </div>
           <div className="snine-capes-heading__actions">
-            <button type="button" className="snine-capes-upload" onClick={() => startUpload("CAPE")}><Upload aria-hidden="true" /> HOCHLADEN</button>
+            <button type="button" className="snine-capes-upload" onClick={() => startUpload("CAPE")}><Upload aria-hidden="true" /> {rt("HOCHLADEN")}</button>
           </div>
         </header>
 
@@ -570,15 +575,15 @@ export function CapesPage() {
           {selected ? (
             <div className="snine-capes-selected">
               <Check aria-hidden="true" />
-              <span>AKTIV: <strong>{selected.capeName}</strong></span>
-              <button type="button" onClick={() => void unequip()}>ABLEGEN</button>
+              <span>{rt("AKTIV:")} <strong>{selected.capeName}</strong></span>
+              <button type="button" onClick={() => void unequip()}>{rt("ABLEGEN")}</button>
             </div>
           ) : null}
         </div>
 
-        {!account ? <div className="snine-capes-empty"><ShieldAlert /><h2>Kein Minecraft-Account aktiv</h2><p>Melde dich zuerst im Launcher mit deinem Minecraft-Account an.</p></div> : null}
+        {!account ? <div className="snine-capes-empty"><ShieldAlert /><h2>{rt("Kein Minecraft-Account aktiv")}</h2><p>{rt("Melde dich zuerst im Launcher mit deinem Minecraft-Account an.")}</p></div> : null}
         {error ? <div className="snine-capes-error"><AlertTriangle aria-hidden="true" /> {error}</div> : null}
-        {loading && account ? <div className="snine-capes-loading"><LoaderCircle className="ui-spin" /> CAPES WERDEN GELADEN...</div> : null}
+        {loading && account ? <div className="snine-capes-loading"><LoaderCircle className="ui-spin" /> {rt("CAPES WERDEN GELADEN...")}</div> : null}
 
         {!loading && account && tab !== "vanilla" ? (
           <div className="snine-capes-grid">
@@ -601,7 +606,7 @@ export function CapesPage() {
                       event.stopPropagation();
                       void favorite(cape);
                     }}
-                    aria-label="Favorit"
+                    aria-label={rt("Favorit")}
                   >
                     <Heart aria-hidden="true" />
                   </button>
@@ -610,13 +615,13 @@ export function CapesPage() {
                 <footer>
                   <div className="snine-cape-card__copy">
                     <strong>{cape.capeName}</strong>
-                    <span>von {cape.ownerName}</span>
-                    <small>{cape.template === "CAPE_ELYTRA" ? "CAPE + ELYTRA" : "NUR CAPE"} · {cape.uses.toLocaleString("de-DE")} VERWENDUNGEN</small>
+                    <span>{rt("von")} {cape.ownerName}</span>
+                    <small>{cape.template === "CAPE_ELYTRA" ? "CAPE + ELYTRA" : "NUR CAPE"} · {cape.uses.toLocaleString("de-DE")} {rt("VERWENDUNGEN")}</small>
                     {cape.status === "REJECTED" && cape.rejectionReason ? <em>{cape.rejectionReason}</em> : null}
                   </div>
                   <div className="snine-cape-card__actions">
                     <button type="button" className="snine-cape-card__ghost" onClick={(event) => { event.stopPropagation(); void openCustomPreview(cape); }}>
-                      <Eye aria-hidden="true" /> ANSEHEN
+                      <Eye aria-hidden="true" /> {rt("ANSEHEN")}
                     </button>
                     {cape.status === "APPROVED" ? (
                       <button
@@ -651,23 +656,23 @@ export function CapesPage() {
               >
                 <div className="snine-cape-card__preview">
                   <CapeTexturePreview src={cape.textureDataUrl} label={cape.name} />
-                  {cape.state === "ACTIVE" ? <span className="snine-cape-status is-approved">MINECRAFT AKTIV</span> : null}
+                  {cape.state === "ACTIVE" ? <span className="snine-cape-status is-approved">{rt("MINECRAFT AKTIV")}</span> : null}
                 </div>
                 <footer>
                   <div className="snine-cape-card__copy">
                     <strong>{cape.name}</strong>
-                    <span>Vanilla Minecraft</span>
+                    <span>{rt("Vanilla Minecraft")}</span>
                     <small>{cape.state}</small>
                   </div>
                   <div className="snine-cape-card__actions">
                     <button type="button" className="snine-cape-card__ghost" onClick={(event) => { event.stopPropagation(); openVanillaPreview(cape); }}>
-                      <Eye aria-hidden="true" /> ANSEHEN
+                      <Eye aria-hidden="true" /> {rt("ANSEHEN")}
                     </button>
                   </div>
                 </footer>
               </article>
             ))}
-            {!visibleVanilla.length ? <div className="snine-capes-empty snine-capes-empty--grid"><h2>Keine Vanilla-Capes gefunden</h2><p>Hier erscheinen die offiziellen Capes deines Microsoft-/Minecraft-Accounts.</p></div> : null}
+            {!visibleVanilla.length ? <div className="snine-capes-empty snine-capes-empty--grid"><h2>{rt("Keine Vanilla-Capes gefunden")}</h2><p>{rt("Hier erscheinen die offiziellen Capes deines Microsoft-/Minecraft-Accounts.")}</p></div> : null}
           </div>
         ) : null}
       </div>

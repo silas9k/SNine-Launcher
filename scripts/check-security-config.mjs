@@ -7,8 +7,29 @@ const tauri = JSON.parse(read("src-tauri/tauri.conf.json"));
 const tauriWindows = JSON.parse(read("src-tauri/tauri.windows.conf.json"));
 const csp = tauri.app?.security?.csp ?? "";
 
-if (tauri.plugins?.updater) errors.push("Tauri-Updater ist weiterhin konfiguriert.");
-if (tauri.bundle?.createUpdaterArtifacts !== false) errors.push("Updater-Artefakte sind nicht explizit deaktiviert.");
+const updater = tauri.plugins?.updater;
+
+if (!updater) {
+  errors.push("Tauri-Updater ist nicht konfiguriert.");
+} else {
+  const endpoints = updater.endpoints;
+
+  if (
+    !Array.isArray(endpoints)
+    || endpoints.length === 0
+    || endpoints.some((endpoint) => typeof endpoint !== "string" || !endpoint.startsWith("https://"))
+  ) {
+    errors.push("Tauri-Updater muss ausschließlich HTTPS-Endpunkte verwenden.");
+  }
+
+  if (typeof updater.pubkey !== "string" || !updater.pubkey.trim()) {
+    errors.push("Tauri-Updater Public Key fehlt.");
+  }
+}
+
+if (tauri.bundle?.createUpdaterArtifacts !== true) {
+  errors.push("Updater-Artefakte müssen für Release-Builds aktiviert sein.");
+}
 if (csp.includes("31.70.89.55") || csp.includes(["http", "://31."].join(""))) errors.push("Unsicherer produktiver HTTP-Endpunkt in CSP.");
 for (const match of csp.matchAll(/http:\/\/[^\s;]+/g)) {
   const url = match[0];

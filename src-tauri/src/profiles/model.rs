@@ -94,7 +94,9 @@ pub struct ResolvedLaunchConfiguration {
     pub legacy_game_arguments: Option<String>,
 }
 
-fn default_version_type() -> String { "release".into() }
+fn default_version_type() -> String {
+    "release".into()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(

@@ -502,7 +502,10 @@ impl Storage {
             }
             transaction.execute(
                 "UPDATE profiles SET updated_at_unix = ?2 WHERE id = ?1",
-                &[Value::from(profile_id), Value::Integer(Utc::now().timestamp())],
+                &[
+                    Value::from(profile_id),
+                    Value::Integer(Utc::now().timestamp()),
+                ],
             )?;
             Ok(())
         })

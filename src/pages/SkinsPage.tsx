@@ -1,3 +1,5 @@
+import { useReleaseText } from "../i18n/releaseUiText";
+import { uiStorage } from "../lib/uiStorage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as skinview3d from "skinview3d";
 import {
@@ -24,7 +26,7 @@ const SKIN_CHANGE_EVENT = "snine-active-skin-changed";
 
 function readLibrary(): Skin[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(LIBRARY_KEY) || "[]") as Array<Partial<Skin>>;
+    const parsed = JSON.parse(uiStorage.getItem(LIBRARY_KEY) || "[]") as Array<Partial<Skin>>;
     return parsed
       .filter((skin): skin is Partial<Skin> & { url: string } => typeof skin.url === "string" && Boolean(skin.url))
       .map((skin, index) => ({
@@ -41,11 +43,11 @@ function readLibrary(): Skin[] {
 
 function applySkin(skin?: Skin) {
   if (skin) {
-    localStorage.setItem(ACTIVE_SKIN_KEY, skin.url);
-    localStorage.setItem(ACTIVE_MODEL_KEY, skin.model);
+    uiStorage.setItem(ACTIVE_SKIN_KEY, skin.url);
+    uiStorage.setItem(ACTIVE_MODEL_KEY, skin.model);
   } else {
-    localStorage.removeItem(ACTIVE_SKIN_KEY);
-    localStorage.removeItem(ACTIVE_MODEL_KEY);
+    uiStorage.removeItem(ACTIVE_SKIN_KEY);
+    uiStorage.removeItem(ACTIVE_MODEL_KEY);
   }
   window.dispatchEvent(new Event(SKIN_CHANGE_EVENT));
 }
@@ -93,8 +95,9 @@ function remoteSkinUrl(value: string): string {
 }
 
 export function SkinsPage() {
+  const rt = useReleaseText();
   const [skins, setSkins] = useState<Skin[]>(readLibrary);
-  const [active, setActive] = useState(() => localStorage.getItem(ACTIVE_SKIN_KEY) || "");
+  const [active, setActive] = useState(() => uiStorage.getItem(ACTIVE_SKIN_KEY) || "");
   const [query, setQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [skinName, setSkinName] = useState("");
@@ -125,7 +128,7 @@ export function SkinsPage() {
 
   const saveLibrary = (next: Skin[]) => {
     setSkins(next);
-    localStorage.setItem(LIBRARY_KEY, JSON.stringify(next));
+    uiStorage.setItem(LIBRARY_KEY, JSON.stringify(next));
   };
 
   const closeDialog = () => {
@@ -183,7 +186,7 @@ export function SkinsPage() {
     const next = skins.map((item) => item.id === skin.id ? { ...item, model } : item);
     saveLibrary(next);
     if (active === skin.url) {
-      localStorage.setItem(ACTIVE_MODEL_KEY, model);
+      uiStorage.setItem(ACTIVE_MODEL_KEY, model);
       window.dispatchEvent(new Event(SKIN_CHANGE_EVENT));
     }
   };
@@ -193,29 +196,29 @@ export function SkinsPage() {
       <div className="snine-skins-page__inner">
         <header className="snine-skins-heading">
           <div>
-            <small>SNINE LAUNCHER / SPIELER</small>
-            <h1>Deine Skin-Sammlung</h1>
-            <p>Importiere Minecraft-Skins, prüfe sie in 3D und wechsle dein Aussehen direkt im Launcher.</p>
+            <small>{rt("SNINE LAUNCHER / SPIELER")}</small>
+            <h1>{rt("Deine Skin-Sammlung")}</h1>
+            <p>{rt("Importiere Minecraft-Skins, prüfe sie in 3D und wechsle dein Aussehen direkt im Launcher.")}</p>
           </div>
-          <button type="button" className="snine-skins-add" onClick={() => setDialogOpen(true)}><Plus aria-hidden="true" /> SKIN HINZUFÜGEN</button>
+          <button type="button" className="snine-skins-add" onClick={() => setDialogOpen(true)}><Plus aria-hidden="true" /> {rt("SKIN HINZUFÜGEN")}</button>
         </header>
 
         <div className="snine-skins-toolbar">
           <label className="snine-skins-search">
             <Search aria-hidden="true" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Skins durchsuchen..." />
-            {query ? <button type="button" onClick={() => setQuery("")} aria-label="Suche leeren"><X aria-hidden="true" /></button> : null}
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={rt("Skins durchsuchen...")} />
+            {query ? <button type="button" onClick={() => setQuery("")} aria-label={rt("Suche leeren")}><X aria-hidden="true" /></button> : null}
           </label>
-          <div className="snine-skins-count"><span>{skins.length + (officialSkin ? 1 : 0)}</span> SKINS GESPEICHERT</div>
+          <div className="snine-skins-count"><span>{skins.length + (officialSkin ? 1 : 0)}</span> {rt("SKINS GESPEICHERT")}</div>
         </div>
 
         <div className="snine-skins-grid">
           {!query && officialSkin ? (
             <article className={`snine-skin-card snine-skin-card--official${active === "" ? " is-active" : ""}`}>
-              <div className="snine-skin-card__badges"><span><ShieldCheck aria-hidden="true" /> MICROSOFT</span>{active === "" ? <b><Check aria-hidden="true" /> AKTIV</b> : null}</div>
+              <div className="snine-skin-card__badges"><span><ShieldCheck aria-hidden="true" /> {rt("MICROSOFT")}</span>{active === "" ? <b><Check aria-hidden="true" /> {rt("AKTIV")}</b> : null}</div>
               <div className="snine-skin-card__preview"><SkinPreview skin={officialSkin.url} model={officialSkin.model} /></div>
               <footer>
-                <div><strong>{officialSkin.name}</strong><small>{officialSkin.model === "slim" ? "SCHLANK" : "KLASSISCH"} · ACCOUNT-SKIN</small></div>
+                <div><strong>{officialSkin.name}</strong><small>{officialSkin.model === "slim" ? "SCHLANK" : "KLASSISCH"} {rt("· ACCOUNT-SKIN")}</small></div>
                 <button type="button" onClick={() => equip(undefined)}>{active === "" ? "AUSGERÜSTET" : "AUSRÜSTEN"}</button>
               </footer>
             </article>
@@ -224,8 +227,8 @@ export function SkinsPage() {
           {!query ? (
             <button type="button" className="snine-skin-import-card" onClick={() => setDialogOpen(true)}>
               <span><Upload aria-hidden="true" /></span>
-              <strong>Neuen Skin hinzufügen</strong>
-              <small>PNG hochladen oder über Spielernamen importieren</small>
+              <strong>{rt("Neuen Skin hinzufügen")}</strong>
+              <small>{rt("PNG hochladen oder über Spielernamen importieren")}</small>
             </button>
           ) : null}
 
@@ -233,11 +236,11 @@ export function SkinsPage() {
             <article className={`snine-skin-card${active === skin.url ? " is-active" : ""}`} key={skin.id}>
               <div className="snine-skin-card__badges">
                 <span>{skin.source === "url" ? "ONLINE" : "LOKAL"}</span>
-                {active === skin.url ? <b><Check aria-hidden="true" /> AKTIV</b> : null}
+                {active === skin.url ? <b><Check aria-hidden="true" /> {rt("AKTIV")}</b> : null}
               </div>
               <div className="snine-skin-card__tools">
-                <button type="button" onClick={() => toggleModel(skin)} title="Arm-Modell wechseln"><Pencil aria-hidden="true" /></button>
-                <button type="button" onClick={() => remove(skin)} title="Skin löschen"><Trash2 aria-hidden="true" /></button>
+                <button type="button" onClick={() => toggleModel(skin)} title={rt("Arm-Modell wechseln")}><Pencil aria-hidden="true" /></button>
+                <button type="button" onClick={() => remove(skin)} title={rt("Skin löschen")}><Trash2 aria-hidden="true" /></button>
               </div>
               <div className="snine-skin-card__preview"><SkinPreview skin={skin.url} model={skin.model} /></div>
               <footer>
@@ -248,26 +251,26 @@ export function SkinsPage() {
           ))}
         </div>
 
-        {query && visibleSkins.length === 0 ? <div className="snine-skins-empty">Kein Skin passt zu „{query}“.</div> : null}
+        {query && visibleSkins.length === 0 ? <div className="snine-skins-empty">{rt("Kein Skin passt zu „")}{query}“.</div> : null}
       </div>
 
       {dialogOpen ? (
         <div className="snine-skin-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog(); }}>
           <section className="snine-skin-dialog" role="dialog" aria-modal="true" aria-labelledby="snine-skin-dialog-title">
-            <header><div><small>NEUER EINTRAG</small><h2 id="snine-skin-dialog-title">Skin hinzufügen</h2></div><button type="button" onClick={closeDialog} aria-label="Schließen"><X aria-hidden="true" /></button></header>
+            <header><div><small>{rt("NEUER EINTRAG")}</small><h2 id="snine-skin-dialog-title">{rt("Skin hinzufügen")}</h2></div><button type="button" onClick={closeDialog} aria-label={rt("Schließen")}><X aria-hidden="true" /></button></header>
             <div className="snine-skin-dialog__body">
-              <label><span>ANZEIGENAME</span><input value={skinName} onChange={(event) => setSkinName(event.target.value)} placeholder="Zum Beispiel: Mein Main Skin" /></label>
-              <label><span>SPIELERNAME ODER DIREKTE PNG-URL</span><input value={skinInput} onChange={(event) => { setSkinInput(event.target.value); setSkinFile(null); }} placeholder="silasO5xe oder https://.../skin.png" /></label>
-              <div className="snine-skin-dialog__divider"><span>ODER</span></div>
+              <label><span>{rt("ANZEIGENAME")}</span><input value={skinName} onChange={(event) => setSkinName(event.target.value)} placeholder={rt("Zum Beispiel: Mein Main Skin")} /></label>
+              <label><span>{rt("SPIELERNAME ODER DIREKTE PNG-URL")}</span><input value={skinInput} onChange={(event) => { setSkinInput(event.target.value); setSkinFile(null); }} placeholder={rt("silasO5xe oder https://.../skin.png")} /></label>
+              <div className="snine-skin-dialog__divider"><span>{rt("ODER")}</span></div>
               <label className={`snine-skin-file${skinFile ? " has-file" : ""}`}>
                 <FolderOpen aria-hidden="true" />
-                <span><strong>{skinFile?.name || "PNG-Datei auswählen"}</strong><small>64×64 oder klassisch 64×32 Pixel</small></span>
+                <span><strong>{skinFile?.name || "PNG-Datei auswählen"}</strong><small>{rt("64×64 oder klassisch 64×32 Pixel")}</small></span>
                 <input type="file" accept="image/png" onChange={(event) => { setSkinFile(event.target.files?.[0] ?? null); setSkinInput(""); }} />
               </label>
-              <fieldset><legend>ARM-MODELL</legend><button type="button" className={skinModel === "classic" ? "is-active" : ""} onClick={() => setSkinModel("classic")}>KLASSISCH</button><button type="button" className={skinModel === "slim" ? "is-active" : ""} onClick={() => setSkinModel("slim")}>SCHLANK</button></fieldset>
+              <fieldset><legend>{rt("ARM-MODELL")}</legend><button type="button" className={skinModel === "classic" ? "is-active" : ""} onClick={() => setSkinModel("classic")}>{rt("KLASSISCH")}</button><button type="button" className={skinModel === "slim" ? "is-active" : ""} onClick={() => setSkinModel("slim")}>{rt("SCHLANK")}</button></fieldset>
               {formError ? <p className="snine-skin-dialog__error">{formError}</p> : null}
             </div>
-            <footer><button type="button" onClick={closeDialog}>ABBRECHEN</button><button type="button" className="is-primary" onClick={() => void addSkin()} disabled={saving}>{saving ? "WIRD GELADEN..." : "SKIN HINZUFÜGEN"}</button></footer>
+            <footer><button type="button" onClick={closeDialog}>{rt("ABBRECHEN")}</button><button type="button" className="is-primary" onClick={() => void addSkin()} disabled={saving}>{saving ? "WIRD GELADEN..." : "SKIN HINZUFÜGEN"}</button></footer>
           </section>
         </div>
       ) : null}

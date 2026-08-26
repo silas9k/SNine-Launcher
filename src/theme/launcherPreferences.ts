@@ -1,3 +1,4 @@
+import { uiStorage } from "../lib/uiStorage";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface LauncherPreferences {
@@ -20,7 +21,7 @@ const CHANGE_EVENT = "snine-launcher-preferences-changed";
 export function loadLauncherPreferences(): LauncherPreferences {
   if (typeof window === "undefined") return { ...DEFAULT_LAUNCHER_PREFERENCES };
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") as Partial<LauncherPreferences>;
+    const saved = JSON.parse(uiStorage.getItem(STORAGE_KEY) || "{}") as Partial<LauncherPreferences>;
     return { ...DEFAULT_LAUNCHER_PREFERENCES, ...saved };
   } catch {
     return { ...DEFAULT_LAUNCHER_PREFERENCES };
@@ -29,13 +30,13 @@ export function loadLauncherPreferences(): LauncherPreferences {
 
 export function saveLauncherPreferences(preferences: LauncherPreferences): LauncherPreferences {
   const saved = { ...DEFAULT_LAUNCHER_PREFERENCES, ...preferences };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  uiStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: saved }));
   return saved;
 }
 
 export function resetLauncherPreferences(): LauncherPreferences {
-  localStorage.removeItem(STORAGE_KEY);
+  uiStorage.removeItem(STORAGE_KEY);
   const defaults = { ...DEFAULT_LAUNCHER_PREFERENCES };
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: defaults }));
   return defaults;
